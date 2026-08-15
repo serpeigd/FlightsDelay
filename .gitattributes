@@ -1,0 +1,4 @@
+# The repo lives on Windows but every script runs inside WSL.
+# Force LF so bash never sees a stray CR.
+* text=auto eol=lf
+*.sh text eol=lf

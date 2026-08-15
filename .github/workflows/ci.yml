@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras --group dev
+
+      - name: Lint
+        run: |
+          uv run ruff check --output-format=github .
+          uv run ruff format --check .
+
+      - name: Type-check (strict)
+        run: uv run mypy
+
+      # Spark and data-lake tests need Java 17 and the 662 MB of BTS ZIPs,
+      # neither of which exists on a runner. They run locally in WSL.
+      - name: Test
+        run: uv run pytest -m "not spark and not data" --cov --cov-report=term-missing

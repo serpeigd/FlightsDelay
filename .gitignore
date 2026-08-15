@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Tooling caches (should live outside the repo via env vars; belt and braces)
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# MLflow: tracking URI points at the WSL data lake, never here
+mlruns/
+mlartifacts/
+
+# Data lake lives in WSL (~/data/flight-delay), never in the repo
+data/
+*.zip
+*.csv
+*.parquet
+_delta_log/
+
+# Spark
+spark-warehouse/
+derby.log
+metastore_db/
+
+# Local outputs
+*.log
+reports/*.html
+!reports/.gitkeep
+
+# Personal interview-preparation notes: local only, never published.
+CONTEXTO.md
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
