@@ -75,6 +75,9 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+# scikit-learn's estimator API is defined with a capital `X`; renaming it would
+# break duck-typing against every other transformer.
+"src/flight_delay/models/train.py" = ["N803"]
 
 # --- mypy -------------------------------------------------------------------
 [tool.mypy]

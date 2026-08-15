@@ -85,9 +85,21 @@ class Paths:
 
 
 def mlflow_tracking_uri(paths: Paths | None = None) -> str:
-    """Tracking URI honouring ``MLFLOW_TRACKING_URI`` if the caller set one."""
+    """Tracking URI honouring ``MLFLOW_TRACKING_URI`` if the caller set one.
+
+    SQLite rather than a ``file:`` store: MLflow 3.15 put the filesystem
+    backend into maintenance mode and refuses to open one without an explicit
+    opt-out. The database still lives in the WSL data lake, so OneDrive never
+    sees it.
+    """
     explicit = os.environ.get("MLFLOW_TRACKING_URI")
     if explicit:
         return explicit
-    target = (paths or Paths.from_env()).mlruns
-    return f"file:{target}"
+    root = (paths or Paths.from_env()).root
+    return f"sqlite:///{root}/mlflow.db"
+
+
+def mlflow_artifact_uri(paths: Paths | None = None) -> str:
+    """Where run artifacts are written. A SQLite backend does not imply one,
+    and the default would be ``./mlruns`` next to the source tree."""
+    return f"file:{(paths or Paths.from_env()).mlruns}"

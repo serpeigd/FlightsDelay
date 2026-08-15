@@ -18,7 +18,9 @@ export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/flight-delay"
 export PYTHONPYCACHEPREFIX="$HOME/.cache/flight-delay/pycache"
 export RUFF_CACHE_DIR="$HOME/.cache/flight-delay/ruff"
 export MYPY_CACHE_DIR="$HOME/.cache/flight-delay/mypy"
-export MLFLOW_TRACKING_URI="file:$FLIGHT_DELAY_DATA/mlruns"
+# SQLite, not a file: store. MLflow 3.15 put the filesystem backend into
+# maintenance mode and refuses to open one without an explicit opt-out.
+export MLFLOW_TRACKING_URI="sqlite:///$FLIGHT_DELAY_DATA/mlflow.db"
 
 # Spark scratch space: shuffle spill is the heaviest writer in the project.
 export SPARK_LOCAL_DIRS="$HOME/.cache/flight-delay/spark-tmp"

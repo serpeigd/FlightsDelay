@@ -4,7 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from flight_delay.config import MONTHS, TEST_YEAR, TRAIN_YEAR, YEARS, Paths, mlflow_tracking_uri
+from flight_delay.config import (
+    MONTHS,
+    TEST_YEAR,
+    TRAIN_YEAR,
+    YEARS,
+    Paths,
+    mlflow_artifact_uri,
+    mlflow_tracking_uri,
+)
 
 
 def test_data_root_comes_from_the_environment(
@@ -34,9 +42,22 @@ def test_split_is_temporal_and_contiguous() -> None:
     assert tuple(range(1, 13)) == MONTHS
 
 
-def test_mlflow_uri_points_into_the_lake(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mlflow_uri_is_a_database_inside_the_lake(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MLflow 3.15 put the file store into maintenance mode and refuses to
+    open one, so tracking goes to SQLite -- still inside WSL, never OneDrive."""
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
     uri = mlflow_tracking_uri(Paths(root=tmp_path))
+    assert uri.startswith("sqlite:///")
+    assert uri.endswith("mlflow.db")
+    assert str(tmp_path) in uri
+
+
+def test_artifacts_land_in_the_lake_not_next_to_the_source(
+    tmp_path: Path,
+) -> None:
+    uri = mlflow_artifact_uri(Paths(root=tmp_path))
     assert uri.startswith("file:")
     assert uri.endswith("mlruns")
 
