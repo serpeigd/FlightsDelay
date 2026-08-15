@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from flight_delay.config import Paths
 
@@ -27,6 +27,13 @@ if TYPE_CHECKING:
 #: data into tasks whose scheduling costs more than their work.
 DEFAULT_SHUFFLE_PARTITIONS = 16
 DEFAULT_DRIVER_MEMORY = "4g"
+
+#: What actually turns Delta on. Fetching the JARs is necessary but not
+#: sufficient.
+DELTA_CONFIG = {
+    "spark.sql.extensions": "io.delta.sql.DeltaSparkSessionExtension",
+    "spark.sql.catalog.spark_catalog": "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+}
 
 
 class DeltaUnavailableError(RuntimeError):
@@ -78,10 +85,15 @@ def build_session(
     except ImportError as exc:  # pragma: no cover - depends on the extra
         raise DeltaUnavailableError("delta-spark is not installed") from exc
 
+    # configure_spark_with_delta_pip only adds the Maven coordinates; wiring
+    # the SQL extension and the catalog is the caller's job. Without these two
+    # the JARs download, the session starts, and the first Delta write fails
+    # with DELTA_CONFIGURE_SPARK_SESSION_WITH_EXTENSION_AND_CATALOG.
+    for key, value in DELTA_CONFIG.items():
+        builder = builder.config(key, value)
+
     try:
-        # delta-spark ships no type information, so the builder it hands back
-        # is untyped; the cast keeps the public signature honest.
-        return cast("SparkSession", configure_spark_with_delta_pip(builder).getOrCreate())
+        return configure_spark_with_delta_pip(builder).getOrCreate()
     except Exception as exc:  # pragma: no cover - depends on network
         raise DeltaUnavailableError(
             "could not start Spark with Delta enabled (the JARs are fetched "
