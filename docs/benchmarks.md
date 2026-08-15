@@ -77,6 +77,87 @@ several columns so that locality survives in more than one direction at once.
 Sorting is the special case that happens to work when the predicate is a single
 point in a single column.
 
+## DuckDB against Spark
+
+Identical SQL strings, executed verbatim on both engines over the same curated
+Parquet, at growing slices of the feed. Nothing is rewritten per engine. Median
+of three runs; Spark's session startup is reported separately rather than
+averaged into query times.
+
+**Workload A — grouped aggregation** (daily delay rate per airport, the series
+the time-series model consumes):
+
+| Months | Rows in | DuckDB | Spark | Spark / DuckDB |
+|---|---|---|---|---|
+| 1 | 0.5M | 0.06 s | 0.89 s | 15.2x |
+| 3 | 1.7M | 0.12 s | 0.88 s | 7.3x |
+| 6 | 3.4M | 0.23 s | 1.44 s | 6.3x |
+| 12 | 6.8M | 0.46 s | 2.31 s | 5.0x |
+| 24 | 13.9M | **0.81 s** | 3.83 s | 4.8x |
+
+**Workload B — window function** (`lag` over aircraft rotation, partitioned by
+`Tail_Number`; a wide transformation that shuffles):
+
+| Months | DuckDB | Spark | Spark / DuckDB |
+|---|---|---|---|
+| 1 | 0.11 s | 1.54 s | 13.8x |
+| 3 | 0.33 s | 2.71 s | 8.3x |
+| 6 | 0.92 s | 3.80 s | 4.1x |
+| 12 | 2.51 s | 7.54 s | 3.0x |
+| 24 | **7.18 s** | 18.31 s | **2.5x** |
+
+Startup: DuckDB 0.03 s, Spark **17.35 s**. For a one-shot job at these sizes,
+Spark spends more time starting than DuckDB spends finishing.
+
+Both engines returned identical answers at every scale.
+
+### Where is the crossover?
+
+**There isn't one inside the measured range.** DuckDB is faster at every scale
+on both workloads.
+
+What does change is the gap. On the shuffle-heavy workload it narrows from
+13.8x to 2.5x across 24x more data: DuckDB grew 65x while Spark grew 12x. From
+12 to 24 months DuckDB took 2.86x longer for 2x the data — superlinear, it is
+sort-bound — against Spark's 2.43x. The lines are converging.
+
+Extrapolating that to a crossing point would be guessing from five points, so
+the honest conclusion is a different one: **at this scale the choice is not
+about speed.** DuckDB wins on speed and will keep winning until the working set
+stops fitting on one machine. What Spark offers here is not a faster answer but
+a different guarantee — the work is not bounded by this laptop's 7.6 GB, and it
+comes with Delta, a catalog and a cluster. The crossover is about memory and
+operational shape, not row count.
+
+Which is why this project ships both, and why 13.9M rows are described as
+13.9M rows rather than as "big data".
+
+### A bug this comparison caught
+
+Running both engines on the same SQL and comparing checksums found something a
+single engine never would: at 3 and 6 months the two disagreed, by 2 and 1 rows
+out of millions.
+
+The cause was the window's `ORDER BY`. 2,408 groups in the feed share a
+`Tail_Number`, `FlightDate` and `CRSDepTime` — 4,819 rows, physically
+impossible for one airframe and so a reporting artifact. With ties, `lag` has
+no defined answer, and each engine picked a different row as "previous". Where
+that row's `ArrDelay` was null and the other's was not, the aggregate moved.
+
+This is not a benchmark problem. `lag` over aircraft rotation is a **model
+feature**, so the same non-determinism would have made training data depend on
+which engine built it. Adding `Flight_Number`, `Origin` and `Dest` to the
+ordering makes it total — zero remaining ties — and the two engines now agree
+exactly at every scale.
+
+### A portability trap
+
+The same SQL is not portable by default. **Spark reads `"ArrDel15"` as the
+string literal, not as the identifier**, so `avg("ArrDel15")` averages a
+constant. Here it raised `CAST_INVALID_INPUT`, but a numeric-looking column
+name would have quietly returned a wrong number. The session now sets
+`spark.sql.ansi.doubleQuotedIdentifiers=true`.
+
 ## What this does not show
 
 - One machine, local mode. Nothing here says anything about shuffle behaviour

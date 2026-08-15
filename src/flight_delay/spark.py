@@ -53,6 +53,12 @@ def _base_config(paths: Paths, shuffle_partitions: int, driver_memory: str) -> d
         "spark.local.dir": os.environ.get("SPARK_LOCAL_DIRS", str(paths.root / ".spark-tmp")),
         "spark.sql.session.timeZone": "UTC",
         "spark.ui.showConsoleProgress": "false",
+        # By default Spark reads "x" as the string literal 'x', not as the
+        # identifier x. The same SQL that works on DuckDB then computes
+        # avg('ArrDel15') over a constant string. Here it raised
+        # CAST_INVALID_INPUT, but a numeric-looking column name would have
+        # silently returned a wrong answer.
+        "spark.sql.ansi.doubleQuotedIdentifiers": "true",
     }
 
 
