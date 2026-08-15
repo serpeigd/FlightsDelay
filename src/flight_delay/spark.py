@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from flight_delay.config import Paths
 
@@ -66,7 +66,7 @@ def build_session(
     from pyspark.sql import SparkSession
 
     resolved = paths or Paths.from_env()
-    builder: Any = SparkSession.builder.appName(app_name).master("local[*]")
+    builder = SparkSession.builder.appName(app_name).master("local[*]")
     for key, value in _base_config(resolved, shuffle_partitions, driver_memory).items():
         builder = builder.config(key, value)
 
@@ -79,7 +79,9 @@ def build_session(
         raise DeltaUnavailableError("delta-spark is not installed") from exc
 
     try:
-        return configure_spark_with_delta_pip(builder).getOrCreate()
+        # delta-spark ships no type information, so the builder it hands back
+        # is untyped; the cast keeps the public signature honest.
+        return cast("SparkSession", configure_spark_with_delta_pip(builder).getOrCreate())
     except Exception as exc:  # pragma: no cover - depends on network
         raise DeltaUnavailableError(
             "could not start Spark with Delta enabled (the JARs are fetched "

@@ -90,23 +90,43 @@ def read_csv_expression(csv_glob: str, header: tuple[str, ...]) -> str:
     )
 
 
-def count_cast_failures(con: duckdb.DuckDBPyConnection, source: str) -> tuple[CastFailure, ...]:
-    """Count values that were non-empty in the CSV but became NULL on cast."""
-    failures: list[CastFailure] = []
+def cast_failure_query(source: str) -> str:
+    """One query counting, for every contract column, how many non-empty
+    values fail their declared cast.
+
+    Deliberately a single statement. The obvious implementation -- one query
+    per column -- costs one full scan per column, which over 50 columns and
+    5.9 GB of CSV means reading roughly 295 GB to answer a data-quality
+    question. Two aggregates per column in one pass reads it once.
+    """
+    aggregates = ["count(*) AS row_count"]
     for name in KEPT_COLUMNS:
         target = _DUCKDB_TYPES[BY_NAME[name].sql_type]
         col = quote(name)
-        row = con.execute(
-            f"SELECT count(*) FILTER (WHERE {col} IS NOT NULL AND {col} <> ''), "
-            f"       count(*) FILTER (WHERE {col} IS NOT NULL AND {col} <> '' "
-            f"                          AND TRY_CAST({col} AS {target}) IS NULL) "
-            f"FROM {source}"
-        ).fetchone()
-        assert row is not None
-        non_null, failed = int(row[0]), int(row[1])
+        present = f"{col} IS NOT NULL AND {col} <> ''"
+        aggregates.append(f"count(*) FILTER (WHERE {present}) AS {quote(name + '__present')}")
+        aggregates.append(
+            f"count(*) FILTER (WHERE {present} AND TRY_CAST({col} AS {target}) IS NULL) "
+            f"AS {quote(name + '__failed')}"
+        )
+    return "SELECT " + ", ".join(aggregates) + f" FROM {source}"
+
+
+def profile(con: duckdb.DuckDBPyConnection, source: str) -> tuple[int, tuple[CastFailure, ...]]:
+    """Row count and per-column cast failures, in a single scan."""
+    row = con.execute(cast_failure_query(source)).fetchone()
+    if row is None:  # pragma: no cover - count(*) always returns a row
+        raise RuntimeError("cast-failure query returned no row")
+
+    rows = int(row[0])
+    failures: list[CastFailure] = []
+    for index, name in enumerate(KEPT_COLUMNS):
+        present, failed = int(row[1 + 2 * index]), int(row[2 + 2 * index])
         if failed:
-            failures.append(CastFailure(name, target, non_null, failed))
-    return tuple(failures)
+            failures.append(
+                CastFailure(name, _DUCKDB_TYPES[BY_NAME[name].sql_type], present, failed)
+            )
+    return rows, tuple(failures)
 
 
 def curate(
@@ -125,9 +145,14 @@ def curate(
     source = read_csv_expression(csv_glob, header)
 
     con.execute(f"CREATE OR REPLACE VIEW raw AS SELECT * FROM {source}")
-    rows_read = int(con.execute("SELECT count(*) FROM raw").fetchone()[0])  # type: ignore[index]
 
-    failures = count_cast_failures(con, "raw") if check_casts else ()
+    # Row count and cast profile share one scan of the CSV; the COPY below is
+    # the only other pass over it.
+    if check_casts:
+        rows_read, failures = profile(con, "raw")
+    else:
+        rows_read = int(con.execute("SELECT count(*) FROM raw").fetchone()[0])  # type: ignore[index]
+        failures = ()
 
     output = paths.table(table_name)
     output.parent.mkdir(parents=True, exist_ok=True)
