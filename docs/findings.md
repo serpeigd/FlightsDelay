@@ -5,7 +5,10 @@ output rather than from a test passing. They are collected in one place because
 they are the substance of the project: the pipeline is scaffolding, these are
 the result.
 
-Each links to the command that produces it.
+Each names the command that produces it.
+
+Figures are quoted to three decimals. The fourth is not reproducible — see the
+last item.
 
 ---
 
@@ -235,3 +238,44 @@ The longest gap between an aircraft's legs in the feed is **664 days**. That is
 not an inbound aircraft, it is an airframe returning from storage; correlation
 with the label peaks at a 12-24h gap and collapses past three days, so the
 feature is cut off at a day.
+
+## 13. Bad news about the inbound is still good news overall
+
+`uvicorn flight_delay.serving.api:app`
+
+Scoring the same evening flight from JFK four ways:
+
+| Request | Delay probability |
+|---|---|
+| 06:00 departure, inbound unknown | 17.8% |
+| 19:30 departure, inbound unknown | **31.5%** |
+| 19:30 departure, inbound landed 90 min late | **22.9%** |
+| 19:30 departure, inbound landed on time | 18.2% |
+
+Telling the model the aircraft is arriving *an hour and a half late* makes the
+prediction go **down**, from 31.5% to 22.9%. That reads like a bug and is not
+one.
+
+Knowing the inbound at all means the turnaround exceeds two hours, and those
+flights are delayed 13.7% of the time against 23.3% for the rest. The aircraft
+has slack. So the flag carries more signal than the number it accompanies, and
+a very late inbound only partially cancels the good news of there being one.
+
+Within the group that has a usable inbound the ordering is exactly right — on
+time 18.2%, ninety minutes late 22.9%. The apparent paradox is a comparison
+across two different populations, and it is the sort of thing that gets a model
+pulled from production by someone who spot-checks one case and does not look at
+the second.
+
+## 14. "Deterministic" was not quite deterministic
+
+`flight-delay train` then `flight-delay export-model`
+
+The same estimator, the same data, `random_state=0`, early stopping off — and
+PR-AUC came out **0.3431** in one run and **0.3426** in another.
+
+The cause is threaded float accumulation while building histograms: the order
+in which partial sums combine is not fixed, and the result differs in the
+fourth decimal. It is well inside noise and it does mean the fourth decimal of
+any figure here is not reproducible. Numbers are therefore quoted to three
+decimals, which is the precision that actually exists.

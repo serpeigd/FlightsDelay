@@ -15,8 +15,15 @@ The pipeline, in order:
     flight-delay calibrate   two calibration holdouts, both of which failed
     flight-delay forecast    daily delay rate, rolling-origin backtest
 
+    flight-delay export-model    deployable bundle, registered in MLflow
+
     flight-delay bench-layout    partition pruning and clustering (needs Java)
     flight-delay bench-engines   DuckDB against Spark  (needs Java)
+
+Then serve it:
+
+    uvicorn flight_delay.serving.api:app
+    streamlit run src/flight_delay/serving/dashboard.py
 """
 
 from __future__ import annotations
@@ -87,6 +94,10 @@ def _dispatch(command: str, paths: Paths, args: argparse.Namespace) -> int:
         from flight_delay.commands import forecasting
 
         handlers = {"forecast": lambda: forecasting.cmd_forecast(paths)}
+    elif command == "export-model":
+        from flight_delay.commands import serving
+
+        handlers = {"export-model": lambda: serving.cmd_export_model(paths)}
     elif command in {"bench-layout", "bench-engines"}:
         from flight_delay.commands import benchmarking
 
@@ -109,6 +120,7 @@ COMMANDS: tuple[tuple[str, str], ...] = (
     ("analyse", "permutation importance and threshold selection"),
     ("calibrate", "compare two calibration holdouts"),
     ("forecast", "rolling-origin backtest of the daily delay rate"),
+    ("export-model", "write the deployable bundle and register it in MLflow"),
     ("bench-layout", "partition pruning and clustering (needs Java)"),
     ("bench-engines", "DuckDB against Spark on identical SQL (needs Java)"),
 )

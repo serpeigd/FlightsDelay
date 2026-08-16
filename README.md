@@ -34,10 +34,15 @@ column, **when its value becomes known** (`SCHEDULED` / `DEPARTED` / `ARRIVED` /
 columns by hand, which makes leakage a contract violation rather than a
 suspiciously good score.
 
-## Twelve things the data said
+## Fourteen things the data said
 
 Collected in **[docs/findings.md](docs/findings.md)** — every one contradicted an
 expectation and came from reading output, not from a test passing. A few:
+
+- **Bad news about the inbound aircraft is still good news overall.** Telling
+  the model the inbound is 90 minutes late *lowers* the prediction, from 31.5%
+  to 22.9%, because knowing it at all means the turnaround exceeds two hours.
+  Reads like a bug; is not one.
 
 - **The clock beats the feature engineering.** Scheduled departure time accounts
   for 14.7% of PR-AUC; the painstakingly built inbound-aircraft features manage
@@ -100,11 +105,47 @@ The two benchmark commands need Java and a Spark session:
 flight-delay bench-layout && flight-delay bench-engines
 ```
 
-Checks — ruff, `mypy --strict`, 91 tests:
+Then export the deployable bundle and serve it:
+
+```bash
+flight-delay export-model
+```
+
+```bash
+uvicorn flight_delay.serving.api:app
+```
+
+```bash
+streamlit run src/flight_delay/serving/dashboard.py
+```
+
+Checks — ruff, `mypy --strict`, 144 tests:
 
 ```bash
 scripts/check.sh
 ```
+
+## Serving
+
+`POST /predict` takes a scheduled flight and returns a probability, a decision
+at the caller's threshold, and the base rate for context — because "38%" means
+nothing to a passenger without "the average flight is 21%".
+
+Two design choices worth naming:
+
+**The threshold is a request parameter, not a constant.** It depends on what a
+missed delay costs against a false alarm, which is a business input this project
+cannot measure. At the conventional 0.5 the service warns 0.9% of passengers and
+catches 2.4% of delays — close to switching itself off.
+
+**Only the pre-departure model is served.** Scenario B scores far better and
+answers a question nobody needs answered at request time.
+
+Serving-side feature construction lives in
+[`serving/features.py`](src/flight_delay/serving/features.py) and is tested
+against the training SQL, since that boundary is where training-serving skew is
+born. A test asserts the served columns match the training schema exactly and in
+order.
 
 ## Documentation
 

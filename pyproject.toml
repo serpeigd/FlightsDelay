@@ -26,6 +26,9 @@ spark = [
 ]
 api = [
     "fastapi>=0.115",
+    # joblib persists the fitted pipeline; the API loads it rather than
+    # refitting on startup.
+    "joblib>=1.4",
     "pydantic>=2.9",
     "uvicorn[standard]>=0.30",
 ]
@@ -35,6 +38,8 @@ ui = [
 
 [dependency-groups]
 dev = [
+    # Required by fastapi.testclient.
+    "httpx>=0.27",
     "mypy>=1.11",
     "pandas-stubs>=2.2",
     "pytest>=8.3",
@@ -91,7 +96,15 @@ files = ["src", "tests"]
 # Spark gate is still open. The override only applies when the module cannot be
 # found: once pyspark is installed its bundled stubs are used normally.
 [[tool.mypy.overrides]]
-module = ["delta.*", "mlflow.*", "duckdb.*", "sklearn.*", "streamlit.*", "pyspark.*"]
+module = [
+    "delta.*",
+    "duckdb.*",
+    "joblib.*",
+    "mlflow.*",
+    "pyspark.*",
+    "sklearn.*",
+    "streamlit.*",
+]
 ignore_missing_imports = true
 
 # --- pytest -----------------------------------------------------------------
