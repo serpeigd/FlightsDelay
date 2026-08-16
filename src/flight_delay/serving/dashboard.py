@@ -18,6 +18,7 @@ import pandas as pd
 import streamlit as st
 
 from flight_delay.serving import artifacts, bundle
+from flight_delay.serving.carriers import label as carrier_label
 from flight_delay.serving.features import build_row
 
 BASE_RATE = 0.2056
@@ -192,9 +193,13 @@ def page_predictor() -> None:
 
         route = onward[onward["dest"] == dest].iloc[0]
 
-        carriers = sorted(loaded.priors.carrier_rate)
+        # Sorted by name, not by code: nobody scans a dropdown looking for "YX".
+        carriers = sorted(loaded.priors.carrier_rate, key=carrier_label)
         carrier = st.selectbox(
-            "Airline", carriers, index=carriers.index("AA") if "AA" in carriers else 0
+            "Airline",
+            carriers,
+            index=carriers.index("AA") if "AA" in carriers else 0,
+            format_func=carrier_label,
         )
 
         flight_date = st.date_input("Date", date(2024, 7, 15))
