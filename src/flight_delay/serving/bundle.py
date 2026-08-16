@@ -18,6 +18,7 @@ from flight_delay.serving.features import PriorRates
 
 MODEL_FILE = "model.joblib"
 PRIORS_FILE = "priors.parquet"
+ROUTES_FILE = "routes.parquet"
 METADATA_FILE = "metadata.json"
 
 
@@ -26,6 +27,10 @@ class ModelBundle:
     model: Any
     priors: PriorRates
     metadata: dict[str, Any]
+    #: One row per flown route: origin, dest, city names, typical distance and
+    #: scheduled duration. Lets a caller pick a real route from a list instead
+    #: of having to know that JFK to LAX is 2475 miles.
+    routes: pd.DataFrame
 
     @property
     def trained_on(self) -> str:
@@ -40,12 +45,20 @@ class ModelBundle:
         return float(self.model.predict_proba(frame)[0, 1])
 
 
-def save(directory: Path, *, model: Any, priors: pd.DataFrame, metadata: dict[str, Any]) -> None:
+def save(
+    directory: Path,
+    *,
+    model: Any,
+    priors: pd.DataFrame,
+    routes: pd.DataFrame,
+    metadata: dict[str, Any],
+) -> None:
     import joblib
 
     directory.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, directory / MODEL_FILE)
     priors.to_parquet(directory / PRIORS_FILE, index=False)
+    routes.to_parquet(directory / ROUTES_FILE, index=False)
     (directory / METADATA_FILE).write_text(json.dumps(metadata, indent=2))
 
 
@@ -54,8 +67,10 @@ def load(directory: Path) -> ModelBundle:
 
     if not (directory / MODEL_FILE).is_file():
         raise FileNotFoundError(f"no model at {directory}. Run `flight-delay export-model` first.")
+    routes_file = directory / ROUTES_FILE
     return ModelBundle(
         model=joblib.load(directory / MODEL_FILE),
         priors=PriorRates.from_frame(pd.read_parquet(directory / PRIORS_FILE)),
         metadata=json.loads((directory / METADATA_FILE).read_text()),
+        routes=pd.read_parquet(routes_file) if routes_file.is_file() else pd.DataFrame(),
     )

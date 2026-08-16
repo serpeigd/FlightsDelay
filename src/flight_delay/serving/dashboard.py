@@ -157,20 +157,53 @@ def page_predictor() -> None:
         _missing("export-model")
         return
 
+    routes = loaded.routes
+    if routes.empty:
+        st.warning("This bundle has no route reference. Re-run `flight-delay export-model`.")
+        return
+
     controls, output = st.columns([2, 3], gap="large")
 
     with controls:
-        c1, c2, c3 = st.columns(3)
-        carrier = c1.text_input("Carrier", "AA", max_chars=3)
-        origin = c2.text_input("From", "JFK", max_chars=4)
-        dest = c3.text_input("To", "LAX", max_chars=4)
+        # Every option is a route that was actually flown, so distance and
+        # duration come from the data instead of the user having to know that
+        # JFK to LAX is 2475 miles.
+        airports = (
+            routes.groupby("origin")
+            .agg(city=("origin_city", "first"), flights=("flights", "sum"))
+            .sort_values("flights", ascending=False)
+            .reset_index()
+        )
+        labels = {r.origin: f"{r.origin} — {r.city}" for r in airports.itertuples()}
+
+        codes: list[str] = airports["origin"].tolist()
+        origin = st.selectbox(
+            "From",
+            codes,
+            format_func=lambda a: labels.get(a, a),
+            index=codes.index("JFK") if "JFK" in codes else 0,
+        )
+
+        onward = routes[routes["origin"] == origin].sort_values("flights", ascending=False)
+        dest_labels = {r.dest: f"{r.dest} — {r.dest_city}" for r in onward.itertuples()}
+        dest = st.selectbox(
+            "To", onward["dest"].tolist(), format_func=lambda a: dest_labels.get(a, a)
+        )
+
+        route = onward[onward["dest"] == dest].iloc[0]
+
+        carriers = sorted(loaded.priors.carrier_rate)
+        carrier = st.selectbox(
+            "Airline", carriers, index=carriers.index("AA") if "AA" in carriers else 0
+        )
 
         flight_date = st.date_input("Date", date(2024, 7, 15))
         hour = st.slider("Scheduled departure", 0, 23, 8, format="%d:00")
 
-        c1, c2 = st.columns(2)
-        distance = c1.number_input("Miles", min_value=1.0, value=2475.0, step=50.0)
-        elapsed = c2.number_input("Minutes", min_value=1.0, value=375.0, step=15.0)
+        st.caption(
+            f"{int(route.distance):,} miles · scheduled {int(route.elapsed_minutes)} min · "
+            f"{int(route.flights):,} flights on this route in the data"
+        )
 
         known = st.toggle(
             "Inbound aircraft has landed",
@@ -178,17 +211,19 @@ def page_predictor() -> None:
         )
         inbound = st.slider("…and it was this late (min)", -30, 180, 0) if known else None
 
+    distance = float(route.distance)
+    elapsed = float(route.elapsed_minutes)
     arrival = (hour * 60 + int(elapsed)) % 1440
     try:
         frame = build_row(
             flight_date=flight_date if isinstance(flight_date, date) else date(2024, 7, 15),
-            carrier=carrier.upper(),
-            origin=origin.upper(),
-            dest=dest.upper(),
+            carrier=carrier,
+            origin=origin,
+            dest=dest,
             scheduled_departure=f"{hour:02d}00",
             scheduled_arrival=f"{arrival // 60:02d}{arrival % 60:02d}",
-            distance=float(distance),
-            scheduled_elapsed_minutes=float(elapsed),
+            distance=distance,
+            scheduled_elapsed_minutes=elapsed,
             priors=loaded.priors,
             inbound_delay_minutes=inbound,
         )

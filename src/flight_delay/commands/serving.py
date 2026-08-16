@@ -59,6 +59,31 @@ def _prior_rates(con: Any, paths: Paths) -> Any:
     ).df()
 
 
+def _routes(con: Any, paths: Paths) -> Any:
+    """Every route actually flown, with its typical distance and duration.
+
+    So a caller can pick "JFK to LAX" from a list instead of having to know it
+    is 2475 miles and scheduled for 375 minutes. Medians rather than means:
+    a handful of diversions would drag an average.
+    """
+    src = f"read_parquet('{paths.table('flights_duckdb')}/**/*.parquet', hive_partitioning=true)"
+    return con.execute(
+        f"""
+        SELECT "Origin"                            AS origin,
+               "Dest"                              AS dest,
+               any_value("OriginCityName")         AS origin_city,
+               any_value("DestCityName")           AS dest_city,
+               median("Distance")                  AS distance,
+               median("CRSElapsedTime")            AS elapsed_minutes,
+               count(*)                            AS flights
+        FROM {src}
+        GROUP BY 1, 2
+        HAVING count(*) >= 100
+        ORDER BY flights DESC
+        """
+    ).df()
+
+
 def cmd_export_model(paths: Paths) -> int:
     import mlflow
 
@@ -68,6 +93,7 @@ def cmd_export_model(paths: Paths) -> int:
     with duckdb_connection(paths) as con:
         split = load_split(con, paths, features)
         priors = _prior_rates(con, paths)
+        routes = _routes(con, paths)
 
     log(f"fitting on {TRAIN_YEAR} ({len(split.train_x):,} flights)")
     start = time.perf_counter()
@@ -88,8 +114,8 @@ def cmd_export_model(paths: Paths) -> int:
     }
 
     target = paths.root / "model"
-    bundle.save(target, model=model, priors=priors, metadata=metadata)
-    log(f"  wrote bundle to {target}")
+    bundle.save(target, model=model, priors=priors, routes=routes, metadata=metadata)
+    log(f"  wrote bundle to {target} ({len(routes):,} routes)")
 
     with mlflow.start_run(run_name="pre-departure bundle"):
         mlflow.log_params(

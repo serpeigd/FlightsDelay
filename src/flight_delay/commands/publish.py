@@ -27,7 +27,7 @@ RESULT_FILES = (
     "engines.json",
     "clustering.json",
 )
-BUNDLE_FILES = ("model.joblib", "priors.parquet", "metadata.json")
+BUNDLE_FILES = ("model.joblib", "priors.parquet", "routes.parquet", "metadata.json")
 
 #: Anything larger than this is a lake artifact that should not be in git.
 MAX_FILE_BYTES = 8 * 1024 * 1024
