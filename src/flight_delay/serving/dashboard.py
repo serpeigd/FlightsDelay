@@ -10,6 +10,7 @@ write-up.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -46,6 +47,38 @@ def _artifact(name: str) -> dict[str, Any] | None:
 
 def _missing(command: str) -> None:
     st.warning(f"No results yet. Run `flight-delay {command}`.")
+
+
+def _searchable(
+    title: str,
+    options: list[str],
+    describe: Callable[[str], str],
+    *,
+    key: str,
+    default: str | None = None,
+    placeholder: str = "type to filter",
+) -> str:
+    """A select box with a visible filter above it.
+
+    Streamlit's own select box already filters as you type, but nothing on
+    screen says so — with 349 airports in the list that is the difference
+    between usable and not.
+
+    A query matching nothing falls back to the full list rather than an empty
+    box, so a typo cannot strand the page with no selection.
+    """
+    query = st.text_input(f"Search {title.lower()}", key=f"{key}_query", placeholder=placeholder)
+    needle = query.strip().lower()
+
+    matches = [o for o in options if needle in describe(o).lower()] if needle else options
+    if needle and not matches:
+        st.caption(f"Nothing matches “{query}”. Showing all {len(options)}.")
+        matches = options
+    elif needle:
+        st.caption(f"{len(matches)} of {len(options)}")
+
+    index = matches.index(default) if default in matches else 0
+    return st.selectbox(title, matches, index=index, format_func=describe, key=key)
 
 
 def _bars(
@@ -178,28 +211,37 @@ def page_predictor() -> None:
         labels = {r.origin: f"{r.origin} — {r.city}" for r in airports.itertuples()}
 
         codes: list[str] = airports["origin"].tolist()
-        origin = st.selectbox(
+        origin = _searchable(
             "From",
             codes,
-            format_func=lambda a: labels.get(a, a),
-            index=codes.index("JFK") if "JFK" in codes else 0,
+            lambda a: labels.get(a, a),
+            key="origin",
+            default="JFK",
+            placeholder="JFK, New York, Chicago",
         )
 
         onward = routes[routes["origin"] == origin].sort_values("flights", ascending=False)
         dest_labels = {r.dest: f"{r.dest} — {r.dest_city}" for r in onward.itertuples()}
-        dest = st.selectbox(
-            "To", onward["dest"].tolist(), format_func=lambda a: dest_labels.get(a, a)
+        dest = _searchable(
+            "To",
+            onward["dest"].tolist(),
+            lambda a: dest_labels.get(a, a),
+            key="dest",
+            default="LAX",
+            placeholder="LAX, Miami, Denver",
         )
 
         route = onward[onward["dest"] == dest].iloc[0]
 
         # Sorted by name, not by code: nobody scans a dropdown looking for "YX".
         carriers = sorted(loaded.priors.carrier_rate, key=carrier_label)
-        carrier = st.selectbox(
+        carrier = _searchable(
             "Airline",
             carriers,
-            index=carriers.index("AA") if "AA" in carriers else 0,
-            format_func=carrier_label,
+            carrier_label,
+            key="carrier",
+            default="AA",
+            placeholder="Delta, Southwest, AA",
         )
 
         flight_date = st.date_input("Date", date(2024, 7, 15))
