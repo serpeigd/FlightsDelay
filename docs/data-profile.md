@@ -11,7 +11,7 @@ and the curation step.
 | Source | BTS On-Time Reporting Carrier On-Time Performance |
 | Period | 2023-01 to 2024-12, 24 monthly archives |
 | Compressed | 694 MB |
-| Extracted CSV | 5.9 GB |
+| Extracted CSV | 6.30 GB |
 | **Rows** | **13,926,960** |
 | Curated Parquet (ZSTD, partitioned by Year/Month) | **305 MB**, 24 files |
 | Curation wall-clock (DuckDB, 8 threads) | **105.8 s** |

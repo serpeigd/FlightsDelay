@@ -1,14 +1,28 @@
 """Command line entry point.
 
-Subcommands are added as each phase lands; ``status`` exists from the first
-commit so there is always a cheap way to check what the data lake actually
-contains rather than assuming.
+Every number in ``docs/`` is produced by a command here. That is the point of
+the file: a reader who doubts a figure can run the step that made it, rather
+than taking a notebook's word for it.
+
+The pipeline, in order:
+
+    flight-delay status      what the data lake actually contains
+    flight-delay extract     ZIPs -> CSV staging
+    flight-delay curate      CSV -> Parquet, with the type contract enforced
+    flight-delay features    curated -> model table, with the cutoff applied
+    flight-delay train       both scenarios against their baselines
+    flight-delay analyse     feature importance and threshold choice
+    flight-delay calibrate   two calibration holdouts, both of which failed
+    flight-delay forecast    daily delay rate, rolling-origin backtest
+
+    flight-delay bench-layout    partition pruning and clustering (needs Java)
+    flight-delay bench-engines   DuckDB against Spark  (needs Java)
 """
 
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from flight_delay.config import MONTHS, YEARS, Paths, mlflow_tracking_uri
 
@@ -34,20 +48,91 @@ def _cmd_status(paths: Paths) -> int:
     if missing := [f"{y}_{m}" for y, m in expected if (y, m) not in present]:
         print(f"missing         {', '.join(missing)}")
 
+    for name, produced_by in (
+        ("flights_duckdb", "curate"),
+        ("model_table", "features"),
+    ):
+        table = paths.table(name)
+        state = "present" if table.is_dir() else f"missing (run `flight-delay {produced_by}`)"
+        print(f"{name:15s} {state}")
+
     return 0 if len(present) == len(expected) and not partial else 1
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="flight-delay", description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("status", help="report what the data lake actually contains")
-
-    args = parser.parse_args(argv)
-    paths = Paths.from_env()
-
-    if args.command == "status":
+def _dispatch(command: str, paths: Paths, args: argparse.Namespace) -> int:
+    # Imported lazily so `status` stays instant and does not need pandas,
+    # sklearn or a JVM just to count files.
+    if command == "status":
         return _cmd_status(paths)
-    raise AssertionError(f"unhandled command: {args.command}")
+
+    handlers: dict[str, Callable[[], int]] = {}
+
+    if command in {"extract", "curate", "features"}:
+        from flight_delay.commands import data
+
+        handlers = {
+            "extract": lambda: data.cmd_extract(paths, force=args.force),
+            "curate": lambda: data.cmd_curate(paths),
+            "features": lambda: data.cmd_features(paths),
+        }
+    elif command in {"train", "analyse", "calibrate"}:
+        from flight_delay.commands import modelling
+
+        handlers = {
+            "train": lambda: modelling.cmd_train(paths),
+            "analyse": lambda: modelling.cmd_analyse(paths),
+            "calibrate": lambda: modelling.cmd_calibrate(paths),
+        }
+    elif command == "forecast":
+        from flight_delay.commands import forecasting
+
+        handlers = {"forecast": lambda: forecasting.cmd_forecast(paths)}
+    elif command in {"bench-layout", "bench-engines"}:
+        from flight_delay.commands import benchmarking
+
+        handlers = {
+            "bench-layout": lambda: benchmarking.cmd_bench_layout(paths),
+            "bench-engines": lambda: benchmarking.cmd_bench_engines(paths),
+        }
+
+    if command not in handlers:
+        raise AssertionError(f"unhandled command: {command}")
+    return handlers[command]()
+
+
+COMMANDS: tuple[tuple[str, str], ...] = (
+    ("status", "report what the data lake actually contains"),
+    ("extract", "unpack the monthly ZIPs into CSV staging"),
+    ("curate", "staged CSV to partitioned Parquet, counting cast failures"),
+    ("features", "build the model table with the prediction cutoff applied"),
+    ("train", "both scenarios, baselines first, logged to MLflow"),
+    ("analyse", "permutation importance and threshold selection"),
+    ("calibrate", "compare two calibration holdouts"),
+    ("forecast", "rolling-origin backtest of the daily delay rate"),
+    ("bench-layout", "partition pruning and clustering (needs Java)"),
+    ("bench-engines", "DuckDB against Spark on identical SQL (needs Java)"),
+)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="flight-delay",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name, help_text in COMMANDS:
+        child = sub.add_parser(name, help=help_text)
+        if name == "extract":
+            child.add_argument(
+                "--force", action="store_true", help="re-extract months already staged"
+            )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    return _dispatch(args.command, Paths.from_env(), args)
 
 
 if __name__ == "__main__":

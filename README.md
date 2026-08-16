@@ -1,61 +1,147 @@
 # Flight Delay Prediction at Scale
 
 Predicting whether a US domestic flight arrives 15+ minutes late, over
-**13.3M flights** (BTS On-Time Performance, 2023-2024), with an explicit
+**13,926,960 flights** (BTS On-Time Performance, 2023-2024), with an explicit
 **prediction cutoff** so the model never sees information that would not exist
 at inference time.
 
-> Work in progress. Numbers in this README are only written down once they have
-> been produced by a command in this repo.
+Every figure below is produced by a command in this repo. Nothing is estimated.
 
-## Why the cutoff matters
+## The result
 
-The source data has 110 columns, and most of the obviously predictive ones are
-recorded *after* the outcome: `DepDelay`, `TaxiOut`, `WheelsOff`, `ArrTime`,
-and the `CarrierDelay`/`WeatherDelay`/`NASDelay`/`LateAircraftDelay` breakdown,
-which is an after-the-fact decomposition of the very delay being predicted.
+| Scenario | What it may know | PR-AUC | Lift |
+|---|---|---|---|
+| **A — pre-departure** (T-2h) | schedule, route, carrier, congestion, inbound aircraft *if it has landed* | **0.343** | 1.65x |
+| **B — post-departure** | everything above, plus actual departure delay | **0.938** | 4.50x |
 
-A model given `DepDelay` scores extremely well and is useless: if you already
-know the aircraft pushed back 40 minutes late, you do not need a model. So two
-scenarios are built and reported side by side:
+Same label, same data, same models, same temporal split. The only difference is
+whether the model may see how late the aircraft actually pushed back.
 
-| Scenario | Known at prediction time | Business question |
+**That gap is the project.** The source feed has 109 columns and most of the
+obviously predictive ones — `DepDelay`, `TaxiOut`, and the
+`CarrierDelay`/`WeatherDelay`/`NASDelay`/`LateAircraftDelay` breakdown — are
+recorded *after* the outcome. `LateAircraftDelay` is the clearest trap: it is an
+after-the-fact accounting of the very delay being predicted.
+
+A model built without an explicit cutoff drifts into scenario B by accident,
+reports 0.94, and is useless for the question a passenger actually asks — *should
+I leave for the airport?* — because at that moment nobody knows the departure
+delay yet.
+
+So [`ingest/schema.py`](src/flight_delay/ingest/schema.py) records, for every
+column, **when its value becomes known** (`SCHEDULED` / `DEPARTED` / `ARRIVED` /
+`LABEL`). Feature sets are assembled by filtering on that, never by listing
+columns by hand, which makes leakage a contract violation rather than a
+suspiciously good score.
+
+## Twelve things the data said
+
+Collected in **[docs/findings.md](docs/findings.md)** — every one contradicted an
+expectation and came from reading output, not from a test passing. A few:
+
+- **The clock beats the feature engineering.** Scheduled departure time accounts
+  for 14.7% of PR-AUC; the painstakingly built inbound-aircraft features manage
+  3.5%. Four of seventeen features measure exactly zero.
+- **Textbook calibration made the model worse, twice.** Isotonic regression
+  degraded Brier and tripled the worst calibration gap. Gradient boosting
+  optimises a proper scoring rule, so it was already calibrated.
+- **Seconds lie.** A scan took 2.10 s before `OPTIMIZE` and 0.48 s after, reading
+  *exactly the same bytes*. That is the page cache, not the layout. Every
+  performance claim here is measured in files and bytes read.
+- **Running two engines found a bug neither would have.** DuckDB and Spark
+  disagreed by 2 rows out of millions, because 4,819 rows tie on a window's
+  `ORDER BY` and `lag()` is undefined under ties — in a column used as a *model
+  feature*.
+- **Weekly seasonality is weaker than assumed**, so the seasonal-naive forecast
+  loses to simply repeating yesterday.
+
+## Scale, honestly
+
+13.9M rows do not need Spark, so the project measures rather than asserts:
+
+| Workload (24 months) | DuckDB | Spark |
 |---|---|---|
-| **A — pre-departure** (T-2h vs scheduled departure) | carrier, route, scheduled time block, day, distance, historical congestion, inbound aircraft rotation | Should the passenger be warned before leaving home? |
-| **B — post-departure** | everything in A, plus actual departure delay and taxi-out | Given it is airborne and late, how late does it arrive? |
+| Grouped aggregation | **0.81 s** | 3.83 s |
+| Window function | **7.18 s** | 18.31 s |
+| Startup | 0.03 s | 17.35 s |
 
-The gap between the two is the finding, not an inconvenience.
+Identical SQL on both. DuckDB wins at every scale tested; the gap narrows from
+13.8x to 2.5x as the data grows 24x but never crosses. The conclusion is that
+the choice is about memory and operational shape, not speed — see
+[docs/benchmarks.md](docs/benchmarks.md), which also covers partition pruning
+(95.3% of bytes skipped) and clustering (82.1%).
 
-## Layout
+## Running it
 
-| Path | What |
-|---|---|
-| `src/flight_delay/` | Library code |
-| `tests/` | Unit tests; `-m spark` and `-m data` are opt-in |
-| `scripts/` | Environment setup, download, benchmarks, checks |
-| `docs/` | Decisions and measured results |
-
-Source lives on Windows; **all data lives inside WSL** (`~/data/flight-delay`).
-`scripts/bench_fs.sh` measured the reason: writing 300 small files takes 19 ms
-on the WSL filesystem versus 851-1470 ms through `/mnt/c`. OneDrive itself is
-not the bottleneck — the Windows/Linux bridge is.
-
-## Getting started
-
-Everything runs inside WSL (Ubuntu). Java 17 and Python 3.12 install into
-`$HOME`, so no `sudo` and no password are needed.
+Everything runs inside WSL. Java 17 and Python 3.12 install into `$HOME`, so no
+`sudo` and no password.
 
 ```bash
 scripts/setup_wsl.sh && scripts/download_bts.sh
 ```
 
 ```bash
-source scripts/env.sh && uv sync --all-extras --group dev && uv run flight-delay status
+source scripts/env.sh && uv sync --all-extras --group dev
 ```
+
+Then the pipeline, in order. Each step prints what it produced:
+
+```bash
+flight-delay status && flight-delay extract && flight-delay curate && flight-delay features
+```
+
+```bash
+flight-delay train && flight-delay analyse && flight-delay calibrate && flight-delay forecast
+```
+
+The two benchmark commands need Java and a Spark session:
+
+```bash
+flight-delay bench-layout && flight-delay bench-engines
+```
+
+Checks — ruff, `mypy --strict`, 91 tests:
 
 ```bash
 scripts/check.sh
 ```
+
+## Documentation
+
+| Document | What is in it |
+|---|---|
+| [findings.md](docs/findings.md) | The twelve results worth knowing |
+| [data-profile.md](docs/data-profile.md) | Volume, schema, label, data quality |
+| [modelling.md](docs/modelling.md) | Both scenarios, calibration, importance, thresholds |
+| [timeseries.md](docs/timeseries.md) | Daily delay rate, rolling-origin backtest |
+| [benchmarks.md](docs/benchmarks.md) | Partition pruning, clustering, DuckDB vs Spark |
+
+## Layout
+
+| Path | What |
+|---|---|
+| `src/flight_delay/ingest/` | Schema contract and extraction |
+| `src/flight_delay/features/` | Model table, with point-in-time correctness in SQL |
+| `src/flight_delay/models/` | Baselines, models, metrics, calibration, decisions |
+| `src/flight_delay/timeseries/` | Daily series and rolling-origin backtest |
+| `src/flight_delay/bench/` | Scan metrics, layout and engine comparisons |
+| `src/flight_delay/commands/` | One module per pipeline step |
+
+Source lives on Windows; **all data lives inside WSL** (`~/data/flight-delay`).
+`scripts/bench_fs.sh` measured why: writing 300 small files takes 19 ms on the
+WSL filesystem against 851-1470 ms through `/mnt/c`. OneDrive is not the
+bottleneck — the Windows/Linux bridge is, by 50-100x.
+
+## Limitations
+
+- **No weather**, the largest external driver of delay. Everything here is a
+  floor established without it.
+- **PR-AUC 0.34 is not a deployable warning system.** It is an honest floor for
+  the pre-departure question, not a product.
+- **US domestic only**, two years. Nothing transfers to European or long-haul
+  operations without refitting.
+- **No hyperparameter search.** Tuning would move the numbers somewhat; it would
+  not move the gap between the two scenarios, which is the finding.
 
 ## Related
 

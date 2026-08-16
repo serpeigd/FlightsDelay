@@ -40,6 +40,30 @@ Four traps, all of which have already cost time here:
 `make` is **not installed** and `sudo` prompts for a password, so everything is
 a shell script under `scripts/`.
 
+## The pipeline
+
+Every figure in `docs/` is produced by a command, not by a notebook or a scratch
+script. If a number needs re-checking, run the step that made it.
+
+```bash
+flight-delay status      # what the lake actually contains
+flight-delay extract     # ZIPs -> CSV staging
+flight-delay curate      # CSV -> Parquet, type contract enforced
+flight-delay features    # -> model table, prediction cutoff applied
+flight-delay train       # both scenarios against their baselines
+flight-delay analyse     # permutation importance, threshold choice
+flight-delay calibrate   # two calibration holdouts (both made it worse)
+flight-delay forecast    # daily delay rate, rolling-origin backtest
+flight-delay bench-layout    # partition pruning, clustering  (needs Java)
+flight-delay bench-engines   # DuckDB vs Spark               (needs Java)
+```
+
+Each command lives in `src/flight_delay/commands/`. Adding one means adding it
+to `COMMANDS` in `cli.py` too — a test asserts the two do not drift apart.
+
+The CSV staging area is 6.3 GB and is safe to delete: `curate` rebuilds the
+Parquet from it in ~100 s, and `extract` rebuilds it from the ZIPs in ~40 s.
+
 ## Checks
 
 ```bash
