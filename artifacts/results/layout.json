@@ -1,0 +1,67 @@
+{
+  "delta_initial": {
+    "files": 24,
+    "megabytes": 449.5
+  },
+  "pruning": {
+    "full": {
+      "files": 24,
+      "megabytes": 449.5,
+      "seconds": 2.1,
+      "rows_scanned": 13926960
+    },
+    "Year = 2024": {
+      "files": 12,
+      "megabytes": 229.9,
+      "seconds": 0.44,
+      "rows_scanned": 7079061
+    },
+    "Year = 2024 AND Month = 7": {
+      "files": 1,
+      "megabytes": 21.0,
+      "seconds": 0.21,
+      "rows_scanned": 634613
+    }
+  },
+  "zorder": {
+    "optimize": {
+      "files_added": 24,
+      "files_removed": 24,
+      "partitions_optimized": 24
+    },
+    "optimize_seconds": 182.4,
+    "files_after": 24,
+    "megabytes_after": 465.3,
+    "atl_before": {
+      "files": 24,
+      "megabytes": 449.5,
+      "seconds": 2.64,
+      "rows_scanned": 13926638
+    },
+    "atl_after": {
+      "files": 24,
+      "megabytes": 465.3,
+      "seconds": 0.84,
+      "rows_scanned": 13923889
+    },
+    "pair_before": {
+      "files": 24,
+      "megabytes": 449.5,
+      "seconds": 1.96,
+      "rows_scanned": 13926960
+    },
+    "pair_after": {
+      "files": 24,
+      "megabytes": 465.3,
+      "seconds": 0.57,
+      "rows_scanned": 13926638
+    },
+    "full_after": {
+      "files": 24,
+      "megabytes": 465.3,
+      "seconds": 0.48,
+      "rows_scanned": 13926960
+    },
+    "answers_match": true
+  }
+}

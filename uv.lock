@@ -496,7 +496,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
-    { name = "mlflow" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyarrow" },
@@ -513,6 +512,9 @@ api = [
 spark = [
     { name = "delta-spark" },
     { name = "pyspark" },
+]
+tracking = [
+    { name = "mlflow" },
 ]
 ui = [
     { name = "streamlit" },
@@ -534,7 +536,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.1" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.115" },
     { name = "joblib", marker = "extra == 'api'", specifier = ">=1.4" },
-    { name = "mlflow", specifier = ">=2.16" },
+    { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=2.16" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=2.2" },
     { name = "pyarrow", specifier = ">=17" },
@@ -544,7 +546,7 @@ requires-dist = [
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.38" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.30" },
 ]
-provides-extras = ["spark", "api", "ui"]
+provides-extras = ["spark", "api", "ui", "tracking"]
 
 [package.metadata.requires-dev]
 dev = [

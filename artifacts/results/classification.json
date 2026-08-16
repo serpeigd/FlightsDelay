@@ -1,0 +1,86 @@
+{
+  "A_pre_departure": {
+    "baseline: train base rate": {
+      "pr_auc": 0.20817151207990184,
+      "roc_auc": 0.5,
+      "brier": 0.1648425530026044,
+      "log_loss": 0.5115435520603903,
+      "lift_over_base_rate": 1.0,
+      "max_calibration_gap": 0.0025336464503376566
+    },
+    "baseline: origin prior-month rate": {
+      "pr_auc": 0.24302141766331853,
+      "roc_auc": 0.5575808749428821,
+      "brier": 0.16513805519792704,
+      "log_loss": 0.5128909020968508,
+      "lift_over_base_rate": 1.1674095808558107,
+      "max_calibration_gap": 0.5142857142857142
+    },
+    "baseline: carrier prior-month rate": {
+      "pr_auc": 0.24548882514604325,
+      "roc_auc": 0.5595698102070308,
+      "brier": 0.16464874774340835,
+      "log_loss": 0.5112454066717412,
+      "lift_over_base_rate": 1.1792623433115,
+      "max_calibration_gap": 0.04535201662651053
+    },
+    "logistic regression": {
+      "pr_auc": 0.32129773885040136,
+      "roc_auc": 0.6533121253806718,
+      "brier": 0.15688490823430642,
+      "log_loss": 0.4878937112911651,
+      "lift_over_base_rate": 1.5434279918525962,
+      "max_calibration_gap": 0.13039956757895765
+    },
+    "gradient boosting": {
+      "pr_auc": 0.3431317802294724,
+      "roc_auc": 0.6665196257945329,
+      "brier": 0.1552845798349263,
+      "log_loss": 0.4832036185171631,
+      "lift_over_base_rate": 1.6483128589553078,
+      "max_calibration_gap": 0.10597566215119225
+    }
+  },
+  "B_post_departure": {
+    "baseline: train base rate": {
+      "pr_auc": 0.20817151207990184,
+      "roc_auc": 0.5,
+      "brier": 0.1648425530026044,
+      "log_loss": 0.5115435520603903,
+      "lift_over_base_rate": 1.0,
+      "max_calibration_gap": 0.0025336464503376566
+    },
+    "baseline: origin prior-month rate": {
+      "pr_auc": 0.24302141766331853,
+      "roc_auc": 0.5575808749428821,
+      "brier": 0.16513805519792704,
+      "log_loss": 0.5128909020968508,
+      "lift_over_base_rate": 1.1674095808558107,
+      "max_calibration_gap": 0.5142857142857142
+    },
+    "baseline: carrier prior-month rate": {
+      "pr_auc": 0.24548882514604325,
+      "roc_auc": 0.5595698102070308,
+      "brier": 0.16464874774340835,
+      "log_loss": 0.5112454066717412,
+      "lift_over_base_rate": 1.1792623433115,
+      "max_calibration_gap": 0.04535201662651053
+    },
+    "logistic regression": {
+      "pr_auc": 0.9340394469441213,
+      "roc_auc": 0.964989754290112,
+      "brier": 0.04157377400089784,
+      "log_loss": 0.1546133157804941,
+      "lift_over_base_rate": 4.486874489270231,
+      "max_calibration_gap": 0.054336476771343706
+    },
+    "gradient boosting": {
+      "pr_auc": 0.9376452745047086,
+      "roc_auc": 0.968925477269909,
+      "brier": 0.04068949730938495,
+      "log_loss": 0.14835917066501705,
+      "lift_over_base_rate": 4.504195915840852,
+      "max_calibration_gap": 0.0474340335431469
+    }
+  }
+}

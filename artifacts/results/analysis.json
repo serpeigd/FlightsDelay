@@ -1,0 +1,196 @@
+{
+  "uncalibrated": {
+    "pr_auc": 0.34160077747719675,
+    "roc_auc": 0.6658840321357211,
+    "brier": 0.1555347444144114,
+    "log_loss": 0.4836703907920184,
+    "lift_over_base_rate": 1.6409583331752,
+    "max_calibration_gap": 0.14647742869612346
+  },
+  "calibrated": {
+    "pr_auc": 0.3382840123024972,
+    "roc_auc": 0.6658388272487271,
+    "brier": 0.15628978152808737,
+    "log_loss": 0.4857666724674428,
+    "lift_over_base_rate": 1.6250254846237304,
+    "max_calibration_gap": 0.32176769012713957
+  },
+  "ranking_preserved": true,
+  "importances": [
+    {
+      "feature": "dep_minute_of_day",
+      "pr_auc_drop": 0.049738
+    },
+    {
+      "feature": "month",
+      "pr_auc_drop": 0.024719
+    },
+    {
+      "feature": "origin",
+      "pr_auc_drop": 0.019962
+    },
+    {
+      "feature": "carrier",
+      "pr_auc_drop": 0.017066
+    },
+    {
+      "feature": "inbound_delay",
+      "pr_auc_drop": 0.011677
+    },
+    {
+      "feature": "dest",
+      "pr_auc_drop": 0.010216
+    },
+    {
+      "feature": "inbound_turnaround_minutes",
+      "pr_auc_drop": 0.010109
+    },
+    {
+      "feature": "arr_minute_of_day",
+      "pr_auc_drop": 0.008645
+    },
+    {
+      "feature": "day_of_week",
+      "pr_auc_drop": 0.008224
+    },
+    {
+      "feature": "carrier_prior_rate",
+      "pr_auc_drop": 0.002868
+    },
+    {
+      "feature": "crs_elapsed",
+      "pr_auc_drop": 0.001647
+    },
+    {
+      "feature": "distance",
+      "pr_auc_drop": 0.000997
+    },
+    {
+      "feature": "origin_prior_rate",
+      "pr_auc_drop": 0.000867
+    },
+    {
+      "feature": "dep_hour",
+      "pr_auc_drop": 0.0
+    },
+    {
+      "feature": "is_weekend",
+      "pr_auc_drop": 0.0
+    },
+    {
+      "feature": "inbound_known",
+      "pr_auc_drop": 0.0
+    },
+    {
+      "feature": "origin_prior_flights",
+      "pr_auc_drop": -0.000139
+    }
+  ],
+  "operating_points": [
+    {
+      "threshold": 0.1,
+      "precision": 0.2332,
+      "recall": 0.9316,
+      "alert_rate": 0.8316
+    },
+    {
+      "threshold": 0.15,
+      "precision": 0.2722,
+      "recall": 0.7506,
+      "alert_rate": 0.574
+    },
+    {
+      "threshold": 0.2,
+      "precision": 0.3127,
+      "recall": 0.5521,
+      "alert_rate": 0.3676
+    },
+    {
+      "threshold": 0.25,
+      "precision": 0.3551,
+      "recall": 0.3758,
+      "alert_rate": 0.2203
+    },
+    {
+      "threshold": 0.3,
+      "precision": 0.4351,
+      "recall": 0.1521,
+      "alert_rate": 0.0728
+    },
+    {
+      "threshold": 0.35,
+      "precision": 0.4811,
+      "recall": 0.0745,
+      "alert_rate": 0.0322
+    },
+    {
+      "threshold": 0.4,
+      "precision": 0.5155,
+      "recall": 0.0376,
+      "alert_rate": 0.0152
+    },
+    {
+      "threshold": 0.45,
+      "precision": 0.539,
+      "recall": 0.0238,
+      "alert_rate": 0.0092
+    },
+    {
+      "threshold": 0.5,
+      "precision": 0.5391,
+      "recall": 0.0238,
+      "alert_rate": 0.0092
+    },
+    {
+      "threshold": 0.55,
+      "precision": 0.5409,
+      "recall": 0.0234,
+      "alert_rate": 0.009
+    },
+    {
+      "threshold": 0.6,
+      "precision": 0.5894,
+      "recall": 0.0116,
+      "alert_rate": 0.0041
+    },
+    {
+      "threshold": 0.65,
+      "precision": 0.5919,
+      "recall": 0.0113,
+      "alert_rate": 0.004
+    },
+    {
+      "threshold": 0.7,
+      "precision": 0.6394,
+      "recall": 0.0074,
+      "alert_rate": 0.0024
+    }
+  ],
+  "cost_optimum": {
+    "1.0": {
+      "threshold": 0.55,
+      "precision": 0.5409,
+      "recall": 0.0234
+    },
+    "2.0": {
+      "threshold": 0.3,
+      "precision": 0.4351,
+      "recall": 0.1521
+    },
+    "3.0": {
+      "threshold": 0.25,
+      "precision": 0.3551,
+      "recall": 0.3758
+    },
+    "5.0": {
+      "threshold": 0.15,
+      "precision": 0.2722,
+      "recall": 0.7506
+    },
+    "10.0": {
+      "threshold": 0.1,
+      "precision": 0.2332,
+      "recall": 0.9316
+    }
+  }
+}

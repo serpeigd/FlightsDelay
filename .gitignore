@@ -25,6 +25,10 @@ data/
 *.parquet
 _delta_log/
 
+# ...except the 1.1 MB the dashboard needs to run without a lake. Written by
+# `flight-delay publish-artifacts`, never by hand.
+!artifacts/**/*.parquet
+
 # Spark
 spark-warehouse/
 derby.log

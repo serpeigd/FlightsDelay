@@ -1,0 +1,7 @@
+# Streamlit Community Cloud reads this file, not pyproject.toml.
+#
+# Deliberately the slim path: the dashboard reads committed artifacts under
+# artifacts/ and scores one flight at a time, so it needs neither MLflow, nor
+# Spark, nor a data lake. Installing the project itself puts flight_delay on
+# the path along with its light core dependencies.
+.[api,ui]

@@ -16,7 +16,6 @@ page computes nothing of its own, so it cannot disagree with `docs/`.
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -24,8 +23,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from flight_delay.config import Paths
-from flight_delay.serving import bundle
+from flight_delay.serving import artifacts, bundle
 from flight_delay.serving.features import build_row
 
 BASE_RATE = 0.2056
@@ -33,16 +31,18 @@ BASE_RATE = 0.2056
 
 @st.cache_resource
 def _bundle() -> bundle.ModelBundle | None:
+    directory = artifacts.model_directory()
+    if directory is None:
+        return None
     try:
-        return bundle.load(Paths.from_env().root / "model")
+        return bundle.load(directory)
     except FileNotFoundError:
         return None
 
 
 @st.cache_data
 def _artifact(name: str) -> dict[str, Any] | None:
-    path = Paths.from_env().bench / name
-    return json.loads(path.read_text()) if path.is_file() else None
+    return artifacts.load_result(name)
 
 
 @st.cache_data
@@ -226,6 +226,7 @@ def main() -> None:
             "Every figure here is read from artifacts the pipeline wrote, so the "
             "dashboard cannot disagree with the documentation."
         )
+        st.caption(f"Source: {artifacts.source_label('classification.json')}.")
     PAGES[choice]()
 
 

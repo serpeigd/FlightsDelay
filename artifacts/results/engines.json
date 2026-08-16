@@ -1,0 +1,87 @@
+{
+  "scales_months": [
+    1,
+    3,
+    6,
+    12,
+    24
+  ],
+  "repeats": 3,
+  "timings": {
+    "daily_rate_by_airport@1m": {
+      "duckdb_seconds": 0.058,
+      "spark_seconds": 0.887,
+      "spark_over_duckdb": 15.22,
+      "rows_out": 10092,
+      "answers_match": true
+    },
+    "daily_rate_by_airport@3m": {
+      "duckdb_seconds": 0.122,
+      "spark_seconds": 0.883,
+      "spark_over_duckdb": 7.26,
+      "rows_out": 29477,
+      "answers_match": true
+    },
+    "daily_rate_by_airport@6m": {
+      "duckdb_seconds": 0.228,
+      "spark_seconds": 1.436,
+      "spark_over_duckdb": 6.29,
+      "rows_out": 59296,
+      "answers_match": true
+    },
+    "daily_rate_by_airport@12m": {
+      "duckdb_seconds": 0.461,
+      "spark_seconds": 2.313,
+      "spark_over_duckdb": 5.02,
+      "rows_out": 119219,
+      "answers_match": true
+    },
+    "daily_rate_by_airport@24m": {
+      "duckdb_seconds": 0.806,
+      "spark_seconds": 3.829,
+      "spark_over_duckdb": 4.75,
+      "rows_out": 238715,
+      "answers_match": true
+    },
+    "inbound_leg_delay@1m": {
+      "duckdb_seconds": 0.111,
+      "spark_seconds": 1.538,
+      "spark_over_duckdb": 13.82,
+      "rows_out": 1,
+      "answers_match": true
+    },
+    "inbound_leg_delay@3m": {
+      "duckdb_seconds": 0.326,
+      "spark_seconds": 2.705,
+      "spark_over_duckdb": 8.29,
+      "rows_out": 1,
+      "answers_match": true
+    },
+    "inbound_leg_delay@6m": {
+      "duckdb_seconds": 0.922,
+      "spark_seconds": 3.799,
+      "spark_over_duckdb": 4.12,
+      "rows_out": 1,
+      "answers_match": true
+    },
+    "inbound_leg_delay@12m": {
+      "duckdb_seconds": 2.513,
+      "spark_seconds": 7.543,
+      "spark_over_duckdb": 3.0,
+      "rows_out": 1,
+      "answers_match": true
+    },
+    "inbound_leg_delay@24m": {
+      "duckdb_seconds": 7.177,
+      "spark_seconds": 18.307,
+      "spark_over_duckdb": 2.55,
+      "rows_out": 1,
+      "answers_match": true
+    }
+  },
+  "mismatches": [],
+  "startup": {
+    "duckdb_seconds": 0.027,
+    "spark_seconds": 17.35
+  }
+}

@@ -119,6 +119,26 @@ uvicorn flight_delay.serving.api:app
 streamlit run src/flight_delay/serving/dashboard.py
 ```
 
+### Deploying the dashboard
+
+The data lake is 1.1 GB and lives in WSL; none of it is in git. But the
+dashboard only reads a handful of JSON summaries and a 1 MB model bundle, and
+those **are** committed under `artifacts/`, written by
+
+```bash
+flight-delay publish-artifacts
+```
+
+so the app runs anywhere with no lake at all. It prefers the live lake when one
+exists and falls back to the committed copy otherwise, and says in the sidebar
+which it used — silently preferring the committed copy would let someone stare
+at stale numbers believing they had just regenerated them.
+
+For [Streamlit Community Cloud](https://share.streamlit.io): point it at this
+repo, set the main file to `src/flight_delay/serving/dashboard.py`, and it will
+install from `requirements.txt`. That path pulls neither MLflow nor Spark —
+`mlflow` sits in the `tracking` extra precisely so the deployed app stays small.
+
 Checks — ruff, `mypy --strict`, 144 tests:
 
 ```bash

@@ -15,7 +15,8 @@ The pipeline, in order:
     flight-delay calibrate   two calibration holdouts, both of which failed
     flight-delay forecast    daily delay rate, rolling-origin backtest
 
-    flight-delay export-model    deployable bundle, registered in MLflow
+    flight-delay export-model         deployable bundle, registered in MLflow
+    flight-delay publish-artifacts    copy the dashboard's inputs into artifacts/
 
     flight-delay bench-layout    partition pruning and clustering (needs Java)
     flight-delay bench-engines   DuckDB against Spark  (needs Java)
@@ -98,6 +99,10 @@ def _dispatch(command: str, paths: Paths, args: argparse.Namespace) -> int:
         from flight_delay.commands import serving
 
         handlers = {"export-model": lambda: serving.cmd_export_model(paths)}
+    elif command == "publish-artifacts":
+        from flight_delay.commands import publish
+
+        handlers = {"publish-artifacts": lambda: publish.cmd_publish_artifacts(paths)}
     elif command in {"bench-layout", "bench-engines"}:
         from flight_delay.commands import benchmarking
 
@@ -121,6 +126,7 @@ COMMANDS: tuple[tuple[str, str], ...] = (
     ("calibrate", "compare two calibration holdouts"),
     ("forecast", "rolling-origin backtest of the daily delay rate"),
     ("export-model", "write the deployable bundle and register it in MLflow"),
+    ("publish-artifacts", "copy the dashboard's inputs into artifacts/ for deployment"),
     ("bench-layout", "partition pruning and clustering (needs Java)"),
     ("bench-engines", "DuckDB against Spark on identical SQL (needs Java)"),
 )

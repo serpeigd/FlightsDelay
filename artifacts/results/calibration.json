@@ -1,0 +1,18 @@
+{
+  "last two months (Nov-Dec)": {
+    "brier_before": 0.1555347444144114,
+    "brier_after": 0.15628978152808737,
+    "gap_before": 0.14647742869612346,
+    "gap_after": 0.32176769012713957,
+    "pr_auc_before": 0.34160077747719675,
+    "pr_auc_after": 0.3382840123024972
+  },
+  "15% of every month": {
+    "brier_before": 0.15524769654712497,
+    "brier_after": 0.1555957333954181,
+    "gap_before": 0.10028794796928941,
+    "gap_after": 0.1583261388272168,
+    "pr_auc_before": 0.3435478486712753,
+    "pr_auc_after": 0.34104306362240766
+  }
+}
