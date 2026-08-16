@@ -1,67 +1,71 @@
 {
-  "delta_initial": {
-    "files": 24,
-    "megabytes": 449.5
+  "flights_natural": {
+    "files": 291,
+    "megabytes": 444.7
+  },
+  "flights_clustered": {
+    "files": 291,
+    "megabytes": 446.6
   },
   "pruning": {
     "full": {
-      "files": 24,
-      "megabytes": 449.5,
-      "seconds": 2.1,
-      "rows_scanned": 13926960
+      "files": 291,
+      "megabytes": 444.7,
+      "seconds": 1.33
     },
     "Year = 2024": {
-      "files": 12,
-      "megabytes": 229.9,
-      "seconds": 0.44,
-      "rows_scanned": 7079061
+      "files": 147,
+      "megabytes": 226.5,
+      "seconds": 0.54
     },
     "Year = 2024 AND Month = 7": {
-      "files": 1,
-      "megabytes": 21.0,
-      "seconds": 0.21,
-      "rows_scanned": 634613
+      "files": 13,
+      "megabytes": 21.2,
+      "seconds": 0.17
     }
   },
-  "zorder": {
-    "optimize": {
-      "files_added": 24,
-      "files_removed": 24,
-      "partitions_optimized": 24
+  "clustering": {
+    "Origin = 'ATL'": {
+      "natural": {
+        "files": 289,
+        "megabytes": 444.5,
+        "seconds": 1.35
+      },
+      "clustered": {
+        "files": 51,
+        "megabytes": 81.7,
+        "seconds": 0.3
+      },
+      "bytes_skipped_fraction": 0.8161,
+      "answers_match": true
     },
-    "optimize_seconds": 182.4,
-    "files_after": 24,
-    "megabytes_after": 465.3,
-    "atl_before": {
-      "files": 24,
-      "megabytes": 449.5,
-      "seconds": 2.64,
-      "rows_scanned": 13926638
+    "Origin = 'JFK'": {
+      "natural": {
+        "files": 291,
+        "megabytes": 444.7,
+        "seconds": 0.89
+      },
+      "clustered": {
+        "files": 199,
+        "megabytes": 316.8,
+        "seconds": 0.45
+      },
+      "bytes_skipped_fraction": 0.2876,
+      "answers_match": true
     },
-    "atl_after": {
-      "files": 24,
-      "megabytes": 465.3,
-      "seconds": 0.84,
-      "rows_scanned": 13923889
-    },
-    "pair_before": {
-      "files": 24,
-      "megabytes": 449.5,
-      "seconds": 1.96,
-      "rows_scanned": 13926960
-    },
-    "pair_after": {
-      "files": 24,
-      "megabytes": 465.3,
-      "seconds": 0.57,
-      "rows_scanned": 13926638
-    },
-    "full_after": {
-      "files": 24,
-      "megabytes": 465.3,
-      "seconds": 0.48,
-      "rows_scanned": 13926960
-    },
-    "answers_match": true
+    "Origin IN ('ATL','SEA')": {
+      "natural": {
+        "files": 291,
+        "megabytes": 444.7,
+        "seconds": 1.3
+      },
+      "clustered": {
+        "files": 291,
+        "megabytes": 446.6,
+        "seconds": 0.48
+      },
+      "bytes_skipped_fraction": -0.0042,
+      "answers_match": true
+    }
   }
 }

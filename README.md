@@ -1,5 +1,7 @@
 # Flight Delay Prediction at Scale
 
+**[Live dashboard →](https://flightsdelay-demo.streamlit.app/)**
+
 Predicting whether a US domestic flight arrives 15+ minutes late, over
 **13,926,960 flights** (BTS On-Time Performance, 2023-2024), with an explicit
 **prediction cutoff** so the model never sees information that would not exist
@@ -134,10 +136,11 @@ exists and falls back to the committed copy otherwise, and says in the sidebar
 which it used — silently preferring the committed copy would let someone stare
 at stale numbers believing they had just regenerated them.
 
-For [Streamlit Community Cloud](https://share.streamlit.io): point it at this
-repo, set the main file to `src/flight_delay/serving/dashboard.py`, and it will
-install from `requirements.txt`. That path pulls neither MLflow nor Spark —
-`mlflow` sits in the `tracking` extra precisely so the deployed app stays small.
+Deployed at **https://flightsdelay-demo.streamlit.app/** on
+[Streamlit Community Cloud](https://share.streamlit.io): main file
+`src/flight_delay/serving/dashboard.py`, installed from `requirements.txt`.
+That path pulls neither MLflow nor Spark — `mlflow` sits in the `tracking`
+extra precisely so the deployed app stays small.
 
 Checks — ruff, `mypy --strict`, 144 tests:
 

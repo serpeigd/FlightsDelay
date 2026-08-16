@@ -167,3 +167,10 @@ name would have quietly returned a wrong number. The session now sets
   smaller target files than `OPTIMIZE` will produce here.
 - Reading fewer bytes is not automatically proportional wall-clock: at this
   scale the data fits in page cache, which is exactly why bytes are reported.
+- **The engine timings move between runs**, by 10-20% on a laptop that is also
+  running a browser. Re-running the whole comparison produced 0.97 s and 3.02 s
+  for the 24-month aggregation against the 0.81 s and 3.83 s quoted above, and
+  4.87 s against 7.18 s for the window function. Every ratio kept its direction
+  and every answer still matched across engines, so the conclusion is
+  unaffected — but a single decimal here is not a measurement, and
+  `artifacts/results/engines.json` holds whichever run wrote it last.
