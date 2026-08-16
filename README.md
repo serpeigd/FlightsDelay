@@ -151,7 +151,7 @@ order.
 
 | Document | What is in it |
 |---|---|
-| [findings.md](docs/findings.md) | The twelve results worth knowing |
+| [findings.md](docs/findings.md) | The fourteen results worth knowing |
 | [data-profile.md](docs/data-profile.md) | Volume, schema, label, data quality |
 | [modelling.md](docs/modelling.md) | Both scenarios, calibration, importance, thresholds |
 | [timeseries.md](docs/timeseries.md) | Daily delay rate, rolling-origin backtest |

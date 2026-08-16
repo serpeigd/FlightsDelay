@@ -7,8 +7,8 @@ the result.
 
 Each names the command that produces it.
 
-Figures are quoted to three decimals. The fourth is not reproducible — see the
-last item.
+**The fourth decimal of any figure here should not be relied on** — see the last
+item for why.
 
 ---
 

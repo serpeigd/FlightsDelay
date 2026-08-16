@@ -37,6 +37,7 @@ reports/*.html
 
 # Personal interview-preparation notes: local only, never published.
 CONTEXTO.md
+DOSSIER.md
 
 # OS / editors
 .DS_Store

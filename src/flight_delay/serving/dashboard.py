@@ -54,7 +54,7 @@ def _doc(name: str) -> str | None:
 def page_findings() -> None:
     st.title("What the data actually said")
     st.caption(
-        "Twelve results that contradicted an expectation. Each came from reading "
+        "Results that contradicted an expectation. Each came from reading "
         "output, not from a test passing."
     )
 
