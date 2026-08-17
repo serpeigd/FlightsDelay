@@ -40,8 +40,11 @@ reports/*.html
 !reports/.gitkeep
 
 # Personal interview-preparation notes: local only, never published.
+# A glob, not `AA_Dossier.*`: that pattern needs a literal dot straight after
+# the name and so missed AA_Dossier_ES.md entirely.
 CONTEXTO.md
-AA_Dossier.*
+AA_Dossier*
+AA_capturas/
 
 # OS / editors
 .DS_Store
