@@ -433,21 +433,21 @@ def page_drivers() -> None:
             "Predictive power lost when each input is shuffled. Measured on the held-out year."
         )
     with right:
-        top = frame.iloc[0]
-        st.metric("Strongest single input", top["label"])
+        st.metric("Strongest single input", frame.iloc[0]["label"])
         st.markdown(
-            "**The clock wins, by double.** Delay builds through the operating "
-            "day, so an 8am departure is a different proposition from a 7pm one."
+            "**The clock wins, by double.**\n\n"
+            "Delay builds through the day. An 8am departure is a different "
+            "proposition from a 7pm one."
         )
         st.markdown(
-            "The inbound-aircraft features took the most work in the whole "
-            "project — point-in-time rules, timestamps across midnight — and "
-            "they land mid-table. That is the measurement, not the hope."
+            "**The hard-won features came fourth.**\n\n"
+            "The inbound-aircraft columns took the most work in the project. "
+            "They land mid-table. That is the measurement."
         )
         st.info(
-            "**Four inputs measured exactly zero** and should be dropped: "
-            "hour-of-day duplicated minute-of-day, weekend duplicated day-of-week, "
-            "and two more that were implied by columns already present."
+            "**Four inputs measured zero and were removed.** Re-scoring without "
+            "them moved PR-AUC from 0.343 to 0.343 — which is why they were "
+            "measured before being trusted."
         )
 
 
@@ -470,19 +470,35 @@ def page_engineering() -> None:
             for engine in ("duckdb", "spark")
         ]
         frame = pd.DataFrame(rows)
-        st.altair_chart(
-            alt.Chart(frame)
-            .mark_line(point=True, strokeWidth=2.5)
-            .encode(
-                x=alt.X("months:Q", title="Months of data"),
-                y=alt.Y("seconds:Q", title="Seconds"),
-                color=alt.Color("engine:N", title=None, scale=alt.Scale(range=[ACCENT, WARN])),
-                strokeDash=alt.StrokeDash("workload:N", title=None),
-                tooltip=["engine", "workload", "months", alt.Tooltip("seconds:Q", format=".2f")],
-            )
-            .properties(height=260),
-            use_container_width=True,
-        )
+        # One chart per workload rather than one chart with a dash legend:
+        # colour alone is readable, colour plus dash has to be decoded.
+        for column, workload in zip(
+            st.columns(2, gap="large"), frame["workload"].unique(), strict=False
+        ):
+            block = frame[frame["workload"] == workload]
+            with column:
+                st.markdown(f"**{workload}**")
+                st.altair_chart(
+                    alt.Chart(block)
+                    .mark_line(point=alt.OverlayMarkDef(size=70), strokeWidth=3)
+                    .encode(
+                        x=alt.X(
+                            "months:Q",
+                            title="Months of data",
+                            axis=alt.Axis(values=[1, 3, 6, 12, 24]),
+                        ),
+                        y=alt.Y("seconds:Q", title="Seconds"),
+                        color=alt.Color(
+                            "engine:N",
+                            title=None,
+                            scale=alt.Scale(domain=["Duckdb", "Spark"], range=[ACCENT, WARN]),
+                            legend=alt.Legend(orient="top"),
+                        ),
+                        tooltip=["engine", "months", alt.Tooltip("seconds:Q", format=".2f")],
+                    )
+                    .properties(height=230),
+                    use_container_width=True,
+                )
         # Missing rather than zero: a default of 0 would render "0.0s" and
         # read as a measurement.
         duck = engines.get("duckdb_startup_seconds")
@@ -492,11 +508,25 @@ def page_engineering() -> None:
             a.metric("DuckDB startup", f"{duck:.2f}s")
             b.metric("Spark startup", f"{spark:.1f}s")
         st.markdown(
-            "**No.** DuckDB wins at every scale tested. The gap narrows as the "
-            "data grows — 13.8x down to 2.5x — but the lines never cross. Spark "
-            "is here to be measured against, not to be justified. What it buys "
-            "at this size is a different memory bound, not a faster answer."
+            "**No.** DuckDB wins at every scale tested, and Spark spends longer "
+            "starting up than DuckDB spends finishing. The gap narrows as the "
+            "data grows — 13.8x down to 2.5x — but the lines never cross."
         )
+
+        with st.expander("So when *would* a cluster be the right call?"):
+            st.markdown(
+                "**This is two years of a feed that goes back to 1987.** The "
+                "limit was my laptop and the time I had, not the source.\n\n"
+                "Extrapolating from what is measured here: two years is 13.9M "
+                "rows and 475 MB of Parquet, and the window-function workload "
+                "has to hold the whole table. This machine has 7.6 GB. So the "
+                "point where one machine stops being enough is somewhere around "
+                "**200-300M rows — roughly the entire history of the feed.**\n\n"
+                "That is the honest answer, and it is not 'when you have a lot "
+                "of data'. It is: **when the working set stops fitting in "
+                "memory, or when the job has to survive a machine dying.** "
+                "Neither is true at two years, so neither is claimed."
+            )
 
     st.divider()
     st.subheader("What layout is worth")
@@ -573,6 +603,15 @@ def page_forecast() -> None:
     if per_airport:
         ranked = sorted(per_airport.items(), key=lambda kv: kv[1])
         frame = pd.DataFrame(ranked, columns=["airport", "MASE"])
+
+        # City names from the bundle's route reference, so "ATL" reads as a
+        # place rather than as a code someone has to already know.
+        loaded = _bundle()
+        if loaded is not None and not loaded.routes.empty:
+            cities = dict(zip(loaded.routes["origin"], loaded.routes["origin_city"], strict=True))
+            frame["airport"] = frame["airport"].map(
+                lambda code: f"{code} ({cities[code].split(',')[0]})" if code in cities else code
+            )
         chart = (
             alt.Chart(frame)
             .mark_bar(cornerRadiusEnd=3, size=22)
