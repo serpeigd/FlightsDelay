@@ -9,7 +9,7 @@ Windows/Linux bridge is, by 50-100x.
 
 | What | Where |
 |---|---|
-| Source | `/mnt/c/.../Amadeus_FlightsDelay` |
+| Source | the repository checkout, on the Windows side (`/mnt/c/...`) |
 | Data lake | `~/data/flight-delay` in WSL (raw, staging, lake, mlruns, bench) |
 | Virtualenv | `~/.venvs/flight-delay` — **never** `.venv` in the repo |
 | Caches (ruff, mypy, pytest, pycache) | `~/.cache/flight-delay` |
@@ -119,5 +119,13 @@ far came from reading output: the single unlabelled flight with no arrival
 record, the one-scan-per-column performance bug, and a Delta session that
 looked healthy while the extension was unset.
 
-`CONTEXTO.md` is personal interview-preparation notes. It is gitignored and
-must never be committed or published.
+## Never publish
+
+`CONTEXTO.md` and `AA_Dossier*` (both `.md` and `.pdf`) are personal working
+files. They are gitignored and must never be committed, pushed or pasted into
+anything public.
+
+The same applies to absolute paths. **No file in this repository should contain
+a home directory, a username or a machine-specific location** — take them from
+the environment or derive them from the checkout, as `scripts/bench_fs.sh` and
+`scripts/env.sh` do.

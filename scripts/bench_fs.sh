@@ -24,15 +24,21 @@ bench() {
   end=$(date +%s%N)
   local del=$(( (end - start) / 1000000 ))
 
-  printf "%-20s escribir: %5d ms   leer: %5d ms   borrar: %5d ms\n" "$label" "$write" "$read" "$del"
+  printf "%-24s write: %5d ms   read: %5d ms   delete: %5d ms\n" "$label" "$write" "$read" "$del"
 }
 
-SCRATCH="/mnt/c/.../fs-bench"
-mkdir -p "$SCRATCH"
+# Both Windows locations are taken from the environment rather than written in:
+# they are machine-specific, and a repository is not the place for someone's
+# home directory. WIN_PLAIN should be any Windows folder that is not synced;
+# WIN_SYNCED, one that is (this repo's own checkout does the job).
+WIN_PLAIN="${WIN_PLAIN:-/mnt/c/Windows/Temp/fs-bench}"
+WIN_SYNCED="${WIN_SYNCED:-$(cd "$(dirname "$0")/.." && pwd)}"
 
-echo "Prueba: 300 ficheros pequeños"
+mkdir -p "$WIN_PLAIN"
+
+echo "Test: 300 small files"
 echo
-bench "$HOME" "WSL nativo"
-bench "$SCRATCH" "Windows sin OneDrive"
-bench "/mnt/c/.../Amadeus_FlightsDelay" "Windows con OneDrive"
-rmdir "$SCRATCH" 2>/dev/null || true
+bench "$HOME" "WSL native"
+bench "$WIN_PLAIN" "Windows, not synced"
+bench "$WIN_SYNCED" "Windows, synced folder"
+rmdir "$WIN_PLAIN" 2>/dev/null || true
