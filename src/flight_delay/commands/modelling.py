@@ -51,7 +51,7 @@ def cmd_train(paths: Paths) -> int:
     import mlflow
 
     start_experiment(paths, EXPERIMENT)
-    summary: dict[str, dict[str, dict[str, float]]] = {}
+    summary: dict[str, dict[str, dict[str, Any]]] = {}
 
     with duckdb_connection(paths) as con:
         for scenario, features in SCENARIOS.items():
@@ -82,7 +82,23 @@ def cmd_train(paths: Paths) -> int:
                         }
                     )
                     mlflow.log_metrics(result.as_dict())
-                summary[scenario][result.name] = result.as_dict()
+                summary[scenario][result.name] = {
+                    **result.as_dict(),
+                    # Per-bin calibration travels with the metrics so the
+                    # dashboard can plot it. Reporting a Brier score without
+                    # showing where the model is overconfident hides the part
+                    # that matters when the number is shown to a passenger.
+                    "calibration": [
+                        {
+                            "lower": b.lower,
+                            "upper": b.upper,
+                            "count": b.count,
+                            "predicted": round(b.mean_predicted, 4),
+                            "observed": round(b.observed_rate, 4),
+                        }
+                        for b in result.calibration
+                    ],
+                }
 
             best = max(results, key=lambda r: r.pr_auc)
             log(
@@ -229,12 +245,20 @@ def cmd_analyse(paths: Paths) -> int:
         "importances": [
             {"feature": i.feature, "pr_auc_drop": round(i.mean_drop, 6)} for i in importances
         ],
+        # Absolute counts beside the rates: "7.3% of passengers" is a
+        # statistic; "509,000 warned, 288,000 delays still missed" is a
+        # decision someone can weigh.
+        "test_flights": len(split.test_x),
         "operating_points": [
             {
                 "threshold": p.threshold,
                 "precision": round(p.precision, 4),
                 "recall": round(p.recall, 4),
                 "alert_rate": round(p.alert_rate, 4),
+                "warned": p.predicted_positive,
+                "correctly_warned": p.true_positive,
+                "false_alarms": p.false_positive,
+                "delays_missed": p.false_negative,
             }
             for p in points
         ],

@@ -165,6 +165,58 @@ def page_question() -> None:
             f"you need the answer, nobody knows it yet."
         )
 
+    calibration = data.get("A_pre_departure", {}).get("gradient boosting", {}).get("calibration")
+    if calibration:
+        st.divider()
+        st.subheader("Is 60% really 60%?")
+        bins = pd.DataFrame(calibration)
+        points = (
+            alt.Chart(bins)
+            .mark_circle(color=ACCENT)
+            .encode(
+                x=alt.X(
+                    "predicted:Q",
+                    title="What the model says",
+                    scale=alt.Scale(domain=[0, 1]),
+                    axis=alt.Axis(format="%"),
+                ),
+                y=alt.Y(
+                    "observed:Q",
+                    title="What actually happened",
+                    scale=alt.Scale(domain=[0, 1]),
+                    axis=alt.Axis(format="%"),
+                ),
+                size=alt.Size("count:Q", title="Flights", scale=alt.Scale(range=[40, 900])),
+                tooltip=[
+                    alt.Tooltip("predicted:Q", format=".1%"),
+                    alt.Tooltip("observed:Q", format=".1%"),
+                    alt.Tooltip("count:Q", format=","),
+                ],
+            )
+        )
+        ideal = (
+            alt.Chart(pd.DataFrame({"x": [0, 1], "y": [0, 1]}))
+            .mark_line(color=MUTED, strokeDash=[5, 4])
+            .encode(x="x:Q", y="y:Q")
+        )
+        left, right = st.columns([3, 2], gap="large")
+        with left:
+            st.altair_chart((ideal + points).properties(height=300), use_container_width=True)
+        with right:
+            st.markdown(
+                "**On the dashed line, the probability is honest.** Below it, the "
+                "model is overconfident.\n\n"
+                "It sits on the line where almost all its mass is, and drifts above "
+                "it at the top — where it says 64%, the real rate is 53%.\n\n"
+                "Those bins are small, and they are exactly the flights a warning "
+                "system would act on."
+            )
+            st.caption(
+                "Isotonic recalibration was tried on two different holdouts and "
+                "made both worse. Gradient boosting optimises log loss, a proper "
+                "scoring rule, so it arrives calibrated."
+            )
+
     st.divider()
     st.subheader("How it is built")
     steps = [
@@ -304,7 +356,9 @@ def page_predictor() -> None:
 
         st.markdown("##### Where would you draw the line?")
         analysis = _artifact("analysis.json")
-        points = analysis.get("operating_points") if analysis else None
+        if analysis is None:
+            return
+        points = analysis.get("operating_points")
         if not points:
             return
 
@@ -324,6 +378,16 @@ def page_predictor() -> None:
         m1.metric("Passengers warned", f"{chosen['alert_rate']:.0%}")
         m2.metric("Of those, actually late", f"{chosen['precision']:.0%}")
         m3.metric("Of all delays, caught", f"{chosen['recall']:.0%}")
+
+        # Rates are a statistic; counts are a decision.
+        if "warned" in chosen:
+            total = analysis.get("test_flights", 0)
+            st.markdown(f"**Over one year of real flights ({total:,}), that setting means:**")
+            n1, n2, n3 = st.columns(3)
+            n1.metric("People warned", f"{chosen['warned']:,}")
+            n2.metric("Warned for nothing", f"{chosen['false_alarms']:,}")
+            n3.metric("Delays missed", f"{chosen['delays_missed']:,}")
+
         st.caption(
             "There is no correct threshold — it depends on what a missed delay "
             "costs against a false alarm. At the conventional 50% the service "
