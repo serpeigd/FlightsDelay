@@ -62,12 +62,12 @@ def test_categoricals_keep_their_dtype() -> None:
         assert isinstance(frame[column].dtype, pd.CategoricalDtype), column
 
 
-def test_dep_hour_is_integer_division_as_in_the_sql() -> None:
-    """The SQL computed dep_minute_of_day / 60 with integer semantics. A float
-    here would fall on the other side of split points the trees learned."""
+def test_minutes_past_midnight_not_hours() -> None:
+    """Minute resolution: an 08:59 departure is not an 08:00 one. The redundant
+    hour column measured exactly zero importance and was dropped."""
     frame = row(scheduled_departure="0859")
     assert frame["dep_minute_of_day"].iloc[0] == 539
-    assert frame["dep_hour"].iloc[0] == 8
+    assert "dep_hour" not in frame.columns
 
 
 def test_weekday_numbering_matches_bts() -> None:
@@ -76,14 +76,13 @@ def test_weekday_numbering_matches_bts() -> None:
     monday = row(flight_date=date(2024, 7, 15))
     sunday = row(flight_date=date(2024, 7, 21))
     assert monday["day_of_week"].iloc[0] == 1
-    assert monday["is_weekend"].iloc[0] == 0
     assert sunday["day_of_week"].iloc[0] == 7
-    assert sunday["is_weekend"].iloc[0] == 1
 
 
-def test_saturday_and_sunday_are_the_weekend() -> None:
-    for day, expected in ((date(2024, 7, 19), 0), (date(2024, 7, 20), 1)):
-        assert row(flight_date=day)["is_weekend"].iloc[0] == expected
+def test_the_weekend_flag_was_dropped_as_redundant() -> None:
+    """day_of_week already carries it, and the separate flag measured exactly
+    zero when its column was shuffled."""
+    assert "is_weekend" not in row().columns
 
 
 def test_priors_are_looked_up_not_supplied_by_the_caller() -> None:
@@ -97,7 +96,6 @@ def test_an_unknown_airport_yields_a_null_prior_rather_than_an_error() -> None:
     has never seen is a normal request, not a failure."""
     frame = row(origin="ZZZ")
     assert pd.isna(frame["origin_prior_rate"].iloc[0])
-    assert pd.isna(frame["origin_prior_flights"].iloc[0])
 
 
 def test_a_missing_inbound_is_in_distribution() -> None:
@@ -105,14 +103,15 @@ def test_a_missing_inbound_is_in_distribution() -> None:
     common case rather than a degraded prediction."""
     frame = row()
     assert pd.isna(frame["inbound_delay"].iloc[0])
-    assert frame["inbound_known"].iloc[0] == 0
 
 
-def test_a_known_inbound_sets_the_flag() -> None:
+def test_a_known_inbound_is_carried_through() -> None:
+    """There is no separate 'known' flag: the null already carries it, and the
+    flag measured zero importance."""
     frame = row(inbound_delay_minutes=42.0, inbound_turnaround_minutes=180.0)
     assert frame["inbound_delay"].iloc[0] == 42.0
-    assert frame["inbound_known"].iloc[0] == 1
     assert frame["inbound_turnaround_minutes"].iloc[0] == 180.0
+    assert "inbound_known" not in frame.columns
 
 
 def test_priors_load_from_a_long_format_frame() -> None:

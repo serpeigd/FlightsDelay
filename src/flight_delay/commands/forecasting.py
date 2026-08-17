@@ -13,6 +13,7 @@ import pandas as pd
 from flight_delay.commands._common import duckdb_connection, log, start_experiment, write_result
 from flight_delay.config import Paths
 from flight_delay.timeseries.backtest import format_scores, rolling_origin_backtest
+from flight_delay.timeseries.sarima import backtest as sarima_backtest
 from flight_delay.timeseries.series import (
     SEASON,
     add_calendar_features,
@@ -83,6 +84,26 @@ def cmd_forecast(paths: Paths) -> int:
                 for s in result.scores
             ]
 
+            if group is None:
+                # The classical baseline, inside the same backtest and scaled
+                # by the same MASE denominator so it lands in the same table.
+                log("\n  fitting SARIMA on the same protocol...")
+                sarima, chosen, _ = sarima_backtest(
+                    frame, horizon=horizon, first_test_date=FIRST_TEST
+                )
+                log(f"  {chosen.label}  (AIC {chosen.aic:.0f} on 2023)")
+                log(
+                    f"  MAE {sarima.mae:.5f}  MASE {sarima.mase:.3f}  "
+                    f"{'beats' if sarima.beats_seasonal_naive else 'LOSES to'} seasonal naive"
+                )
+                summary[label][f"h{horizon}"].append(
+                    {"name": chosen.label, **{k: round(v, 6) for k, v in sarima.as_dict().items()}}
+                )
+
+                # The series itself, not just scores about it. Without this the
+                # dashboard reports MASE for a curve nobody can see.
+                summary.setdefault("national_curve", {})[f"h{horizon}"] = _curve(result.predictions)
+
             if group:
                 log("\n  MASE per airport (gradient boosting):")
                 per_airport = _per_group_mase(result.predictions, frame, group)
@@ -106,6 +127,22 @@ def cmd_forecast(paths: Paths) -> int:
 
     write_result(paths, "timeseries.json", summary)
     return 0
+
+
+def _curve(predictions: pd.DataFrame) -> list[dict[str, Any]]:
+    """Observed and forecast rate per day, for plotting.
+
+    Column arrays rather than ``itertuples``: the latter hands back a union of
+    every dtype in the frame, which is unusable without casting each field.
+    """
+    ordered = predictions.sort_values("date")
+    dates = ordered["date"].dt.strftime("%Y-%m-%d").tolist()
+    actual = ordered["rate"].to_numpy(dtype=float)
+    model = ordered["model"].to_numpy(dtype=float)
+    return [
+        {"date": d, "actual": round(a, 5), "model": round(m, 5)}
+        for d, a, m in zip(dates, actual, model, strict=True)
+    ]
 
 
 def _per_group_mase(

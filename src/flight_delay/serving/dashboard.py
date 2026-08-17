@@ -475,6 +475,36 @@ def page_forecast() -> None:
         format_func=lambda h: "Tomorrow" if h == "h1" else "A week out",
     )
 
+    curve = data.get("national_curve", {}).get(horizon)
+    if curve:
+        frame = pd.DataFrame(curve)
+        frame["date"] = pd.to_datetime(frame["date"])
+        tall = frame.melt("date", ["actual", "model"], "series", "rate")
+        tall["series"] = tall["series"].map({"actual": "Observed", "model": "Forecast"})
+        st.altair_chart(
+            alt.Chart(tall)
+            .mark_line(strokeWidth=1.8)
+            .encode(
+                x=alt.X("date:T", title=None),
+                y=alt.Y("rate:Q", title="Share of flights late", axis=alt.Axis(format="%")),
+                color=alt.Color("series:N", title=None, scale=alt.Scale(range=[INK, ACCENT])),
+                tooltip=["date:T", "series:N", alt.Tooltip("rate:Q", format=".1%")],
+            )
+            .properties(height=240),
+            use_container_width=True,
+        )
+        gap = (frame["actual"] - frame["model"]).abs()
+        a, b, c = st.columns(3)
+        a.metric("Worst day observed", f"{frame['actual'].max():.0%}")
+        b.metric("Typical error", f"{gap.median():.1%}")
+        c.metric("Worst miss", f"{gap.max():.1%}")
+        st.caption(
+            "Every day of 2024, forecast by a model refitted monthly on everything "
+            "before it. It tracks the weekly rhythm and flattens the spikes — which "
+            "is what an error-minimising objective is built to do."
+        )
+        st.divider()
+
     per_airport: dict[str, float] | None = data.get("airports", {}).get(f"{horizon}_per_airport")
     if per_airport:
         ranked = sorted(per_airport.items(), key=lambda kv: kv[1])

@@ -196,6 +196,36 @@ Source lives on Windows; **all data lives inside WSL** (`~/data/flight-delay`).
 WSL filesystem against 851-1470 ms through `/mnt/c`. OneDrive is not the
 bottleneck — the Windows/Linux bridge is, by 50-100x.
 
+## What this would look like on a cluster
+
+Everything here runs on one laptop, which is the honest scale for 13.9M rows.
+The shape it would take on managed infrastructure is worth stating, since the
+techniques are the same ones and only the surfaces move.
+
+| Here | On Databricks |
+|---|---|
+| Delta tables under `~/data/flight-delay/lake` | Delta tables on object storage — ADLS or S3 — behind Unity Catalog |
+| `flight-delay curate` in a shell | The same command as a Job task on a job cluster, one task per pipeline step |
+| SQLite MLflow backend | The workspace's managed MLflow, same API, same `log_model` call |
+| `spark.driver.memory = 4g`, `local[*]` | Cluster sizing; `spark.sql.shuffle.partitions` becomes a real decision rather than a laptop compromise |
+| Partition pruning measured in files read | The same measurement, and it becomes a **billing** measurement: scanned bytes are what a warehouse charges for |
+
+Two things would change substantively rather than cosmetically:
+
+**The engine comparison would flip eventually.** DuckDB wins here because the
+working set fits in memory. At the point where it does not, the comparison in
+[docs/benchmarks.md](docs/benchmarks.md) stops being about speed and starts
+being about whether the job completes at all.
+
+**Clustering would start paying.** Z-ordering did nothing at this size because
+`OPTIMIZE` compacts each month into one file and skipping decides per file. With
+partitions holding hundreds of files, the 82% figure measured by hand here is
+what `OPTIMIZE ... ZORDER BY` would deliver on its own.
+
+My own Databricks experience is on **Azure**, not AWS. Spark and Delta are
+identical across the two; what differs is the object store and the identity
+model.
+
 ## Limitations
 
 - **No weather**, the largest external driver of delay. Everything here is a

@@ -72,6 +72,36 @@ At horizon 7 the naive forecast and the seasonal naive are *identical* — seven
 days ago is the same weekday last week — and both scored 1.100 to three
 decimals. That is a consistency check on the backtest, not a coincidence.
 
+## The classical baseline
+
+Gradient boosting on lags and calendar features is the modern default, and it
+is not what a statistician reaches for first when handed a daily series with
+weekly seasonality. So SARIMA runs inside the same backtest, against the same
+MASE scale, over the same test period.
+
+Order chosen once by AIC on the training year only — re-selecting at each refit
+would let the test period influence the model class. The grid picked
+**SARIMA(2,0,1)(0,1,1)[7]**, AIC −1089.
+
+| Horizon | Gradient boosting | SARIMA | Seasonal naive |
+|---|---|---|---|
+| 1 day | **0.798** | 1.075 | 1.084 |
+| 7 days | **0.987** | 1.153 | 1.100 |
+
+**SARIMA loses at both horizons, and loses to the seasonal naive too.**
+
+The reason is visible in what each model is given. SARIMA sees only the series;
+gradient boosting also sees day of week, month, and **distance to the nearest
+federal holiday**. On a series whose largest excursions are holiday travel and
+single-day disruptions, that is most of what there is to know.
+
+**This is not a fair fight, and the fair version is the obvious next step.**
+`SARIMAX` accepts exogenous regressors, and handing it the same calendar
+columns would isolate the model class from the feature set. As run, the
+comparison shows that *the features are doing the work* — which is the same
+conclusion permutation importance reached from the other direction, where the
+scheduled departure time outweighed everything engineered on top of it.
+
 ## Per airport
 
 Ten busiest origins, 7,308 airport-days, same protocol.

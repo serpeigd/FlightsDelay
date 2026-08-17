@@ -46,23 +46,27 @@ CUTOFF_HOURS: Final = 2
 MAX_TURNAROUND_HOURS: Final = 24
 
 #: Features knowable from the published schedule alone.
+#:
+#: Four columns were removed after permutation importance measured them at
+#: exactly zero, and each was redundant for a reason worth naming:
+#: ``dep_hour`` was ``dep_minute_of_day // 60``; ``is_weekend`` was recoverable
+#: from ``day_of_week``; ``inbound_known`` was implied by whether
+#: ``inbound_delay`` is null, which gradient boosting reads directly; and
+#: ``origin_prior_flights`` scored marginally negative, which is noise around
+#: zero. The model table still carries them so the measurement can be redone.
 SCENARIO_A_FEATURES: Final[tuple[str, ...]] = (
     "dep_minute_of_day",
-    "dep_hour",
     "arr_minute_of_day",
     "day_of_week",
     "month",
-    "is_weekend",
     "distance",
     "crs_elapsed",
     "carrier",
     "origin",
     "dest",
     "origin_prior_rate",
-    "origin_prior_flights",
     "carrier_prior_rate",
     "inbound_delay",
-    "inbound_known",
     "inbound_turnaround_minutes",
 )
 

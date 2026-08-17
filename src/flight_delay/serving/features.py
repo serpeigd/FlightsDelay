@@ -86,23 +86,20 @@ def build_row(
 
     values: dict[str, object] = {
         "dep_minute_of_day": dep_minutes,
-        # Integer division, as in the SQL. A float would shift the split points
-        # the trees learned.
-        "dep_hour": dep_minutes // 60,
         "arr_minute_of_day": clock_to_minutes(scheduled_arrival),
         "day_of_week": day_of_week,
         "month": flight_date.month,
-        "is_weekend": int(day_of_week in (6, 7)),
         "distance": distance,
         "crs_elapsed": scheduled_elapsed_minutes,
         "carrier": carrier,
         "origin": origin,
         "dest": dest,
         "origin_prior_rate": priors.origin_rate.get(origin),
-        "origin_prior_flights": priors.origin_flights.get(origin),
         "carrier_prior_rate": priors.carrier_rate.get(carrier),
+        # Null when the caller does not know the inbound leg. That is the
+        # common case and the model was trained on it; there is no separate
+        # flag because the null carries the same information.
         "inbound_delay": inbound_delay_minutes,
-        "inbound_known": int(inbound_delay_minutes is not None),
         "inbound_turnaround_minutes": inbound_turnaround_minutes,
     }
 

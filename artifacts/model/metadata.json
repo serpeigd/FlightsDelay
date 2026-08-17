@@ -4,27 +4,23 @@
   "test_year": 2024,
   "features": [
     "dep_minute_of_day",
-    "dep_hour",
     "arr_minute_of_day",
     "day_of_week",
     "month",
-    "is_weekend",
     "distance",
     "crs_elapsed",
     "carrier",
     "origin",
     "dest",
     "origin_prior_rate",
-    "origin_prior_flights",
     "carrier_prior_rate",
     "inbound_delay",
-    "inbound_known",
     "inbound_turnaround_minutes"
   ],
-  "pr_auc": 0.34263,
-  "roc_auc": 0.666328,
-  "brier": 0.155331,
-  "log_loss": 0.48329,
-  "lift_over_base_rate": 1.645901,
-  "max_calibration_gap": 0.115093
+  "pr_auc": 0.343319,
+  "roc_auc": 0.666526,
+  "brier": 0.155264,
+  "log_loss": 0.483164,
+  "lift_over_base_rate": 1.649211,
+  "max_calibration_gap": 0.106075
 }
