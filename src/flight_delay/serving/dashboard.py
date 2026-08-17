@@ -856,12 +856,12 @@ def _fmt(value: float | None, spec: str, fallback: str = "—") -> str:
     return fallback if value is None else format(value, spec)
 
 
-def _conclusions() -> list[tuple[str, str, str, str]]:
-    """One line per question the project set out to answer.
+def _conclusions() -> list[tuple[str, str]]:
+    """One finding per question the project set out to answer.
 
-    Returned as (colour, verdict, claim, number) rather than rendered here, and
-    as text rather than as a table: a five-column table is unreadable the
-    moment the sidebar is open, and this page is meant to be read, not parsed.
+    Returned as (finding, evidence). The finding is written as a sentence that
+    carries its own verdict, so no badge is needed to say whether it went well:
+    "made them worse, twice" is not a result that needs labelling.
 
     Numbers are pulled from the artifacts rather than typed in, so this page
     cannot quietly disagree with the pages that produced them.
@@ -890,43 +890,39 @@ def _conclusions() -> list[tuple[str, str, str, str]]:
 
     return [
         (
-            "blue",
-            "The point",
-            "One leaked column replaces the problem with an easier one",
-            f"{_fmt(after, '.3f')} with the departure delay, {_fmt(before, '.3f')} without it "
-            "— same data, same model, same split",
+            "Knowing the departure delay is almost the whole problem — "
+            "and nobody knows it in time.",
+            f"PR-AUC {_fmt(after, '.3f')} with that one column, {_fmt(before, '.3f')} "
+            "without it. Same data, same model, same split.",
         ),
         (
-            "green",
-            "Works",
-            "A delay can be predicted two hours ahead, but only weakly",
+            "Two hours ahead, the model works. Only just.",
             f"PR-AUC {_fmt(before, '.3f')}"
-            + (f", {before / BASE_RATE:.2f}x a base rate of 20.6%" if before else ""),
+            + (
+                f" against a base rate of {BASE_RATE:.1%} — {before / BASE_RATE:.2f}x "
+                "better than guessing, on a year it never saw."
+                if before
+                else "."
+            ),
         ),
         (
-            "red",
-            "Failed",
-            "Textbook recalibration made the probabilities worse, twice",
-            f"Isotonic regression, {len(calibration) or 2} holdouts, "
-            f"{worse or 2} worse Brier scores",
+            "The textbook fix for overconfident probabilities made them worse. Twice.",
+            f"Isotonic regression on {len(calibration) or 2} separate holdouts; "
+            f"{worse or 2} of {len(calibration) or 2} came back with a worse Brier score.",
         ),
         (
-            "orange",
-            "Half",
-            "Tomorrow is forecastable, next week is not",
-            f"MASE {_fmt(mase('h1'), '.3f')} at one day, "
-            f"{_fmt(mase('h7'), '.3f')} at seven — 1.3% better than doing nothing",
+            "Tomorrow is forecastable. Next week is not.",
+            f"MASE {_fmt(mase('h1'), '.3f')} at one day. At seven, "
+            f"{_fmt(mase('h7'), '.3f')} — 1.3% better than doing nothing at all.",
         ),
         (
-            "red",
-            "Failed",
-            "13.9M rows never needed a cluster",
-            f"DuckDB faster in {duck_wins or 10} of {len(timings) or 10} measurements",
+            "13.9M rows never needed a cluster.",
+            f"The same SQL on both engines: DuckDB faster in {duck_wins or 10} of "
+            f"{len(timings) or 10} measurements, and Spark spends longer starting up "
+            "than DuckDB spends finishing.",
         ),
         (
-            "grey",
-            "Bounded",
-            "A cluster would pay off eventually — for memory, not for speed",
+            "One would pay off eventually — for memory, not for speed.",
             _feed_evidence(),
         ),
     ]
@@ -944,24 +940,25 @@ def _feed_evidence() -> str:
     if not (feed and projection and memory):
         return "run `flight-delay bench-scale`"
     return (
-        f"{feed['months_found']} archives exist, "
-        f"{feed['compressed_bytes'] / 1e9:.2f} GB ≈ "
-        f"{projection['estimated_feed_rows'] / 1e6:.0f}M rows; this machine runs out near "
-        f"{memory['rows_that_fit'] / 1e6:.0f}M"
+        f"The published feed is {feed['months_found']} archives and "
+        f"{feed['compressed_bytes'] / 1e9:.2f} GB — about "
+        f"{projection['estimated_feed_rows'] / 1e6:.0f}M rows. This machine runs out of "
+        f"memory near {memory['rows_that_fit'] / 1e6:.0f}M."
     )
 
 
 def page_conclusions() -> None:
-    st.title("Six questions, six answers")
+    st.title("What the six questions answered")
     st.markdown(
-        "**Three of them came back negative.** They are here for the same reason "
-        "as the positive ones: a write-up that only reports its wins is not a "
-        "measurement."
+        "Three of the six came back negative. They are written up at the same "
+        "length as the other three, because **a report that only lists its wins "
+        "is an advertisement, not a measurement.**"
     )
+    st.divider()
 
-    for colour, verdict, claim, number in _conclusions():
-        st.markdown(f"##### :{colour}[{verdict}] · {claim}")
-        st.caption(number)
+    for number, (finding, evidence) in enumerate(_conclusions(), start=1):
+        st.markdown(f"**{number}. {finding}**")
+        st.caption(evidence)
 
     st.caption("Every figure above is read from the file the pipeline wrote.")
     st.divider()
