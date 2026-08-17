@@ -61,84 +61,137 @@
       "pr_auc_drop": 9e-05
     }
   ],
+  "test_flights": 6965247,
   "operating_points": [
     {
       "threshold": 0.1,
       "precision": 0.2358,
       "recall": 0.92,
-      "alert_rate": 0.8122
+      "alert_rate": 0.8122,
+      "warned": 5656860,
+      "correctly_warned": 1333979,
+      "false_alarms": 4322881,
+      "delays_missed": 115987
     },
     {
       "threshold": 0.15,
       "precision": 0.2703,
       "recall": 0.7614,
-      "alert_rate": 0.5865
+      "alert_rate": 0.5865,
+      "warned": 4084820,
+      "correctly_warned": 1103957,
+      "false_alarms": 2980863,
+      "delays_missed": 346009
     },
     {
       "threshold": 0.2,
       "precision": 0.3055,
       "recall": 0.589,
-      "alert_rate": 0.4013
+      "alert_rate": 0.4013,
+      "warned": 2795393,
+      "correctly_warned": 854004,
+      "false_alarms": 1941389,
+      "delays_missed": 595962
     },
     {
       "threshold": 0.25,
       "precision": 0.3399,
       "recall": 0.4339,
-      "alert_rate": 0.2657
+      "alert_rate": 0.2657,
+      "warned": 1850714,
+      "correctly_warned": 629118,
+      "false_alarms": 1221596,
+      "delays_missed": 820848
     },
     {
       "threshold": 0.3,
       "precision": 0.3736,
       "recall": 0.3076,
-      "alert_rate": 0.1714
+      "alert_rate": 0.1714,
+      "warned": 1193903,
+      "correctly_warned": 446035,
+      "false_alarms": 747868,
+      "delays_missed": 1003931
     },
     {
       "threshold": 0.35,
       "precision": 0.4077,
       "recall": 0.2119,
-      "alert_rate": 0.1082
+      "alert_rate": 0.1082,
+      "warned": 753771,
+      "correctly_warned": 307308,
+      "false_alarms": 446463,
+      "delays_missed": 1142658
     },
     {
       "threshold": 0.4,
       "precision": 0.4416,
       "recall": 0.141,
-      "alert_rate": 0.0665
+      "alert_rate": 0.0665,
+      "warned": 462935,
+      "correctly_warned": 204438,
+      "false_alarms": 258497,
+      "delays_missed": 1245528
     },
     {
       "threshold": 0.45,
       "precision": 0.4732,
       "recall": 0.0901,
-      "alert_rate": 0.0397
+      "alert_rate": 0.0397,
+      "warned": 276203,
+      "correctly_warned": 130712,
+      "false_alarms": 145491,
+      "delays_missed": 1319254
     },
     {
       "threshold": 0.5,
       "precision": 0.502,
       "recall": 0.0547,
-      "alert_rate": 0.0227
+      "alert_rate": 0.0227,
+      "warned": 157878,
+      "correctly_warned": 79258,
+      "false_alarms": 78620,
+      "delays_missed": 1370708
     },
     {
       "threshold": 0.55,
       "precision": 0.5346,
       "recall": 0.031,
-      "alert_rate": 0.0121
+      "alert_rate": 0.0121,
+      "warned": 84122,
+      "correctly_warned": 44974,
+      "false_alarms": 39148,
+      "delays_missed": 1404992
     },
     {
       "threshold": 0.6,
       "precision": 0.5764,
       "recall": 0.0159,
-      "alert_rate": 0.0057
+      "alert_rate": 0.0057,
+      "warned": 40045,
+      "correctly_warned": 23080,
+      "false_alarms": 16965,
+      "delays_missed": 1426886
     },
     {
       "threshold": 0.65,
       "precision": 0.6448,
       "recall": 0.0079,
-      "alert_rate": 0.0025
+      "alert_rate": 0.0025,
+      "warned": 17744,
+      "correctly_warned": 11441,
+      "false_alarms": 6303,
+      "delays_missed": 1438525
     },
     {
       "threshold": 0.7,
       "precision": 0.7597,
       "recall": 0.004,
-      "alert_rate": 0.0011
+      "alert_rate": 0.0011,
+      "warned": 7571,
+      "correctly_warned": 5752,
+      "false_alarms": 1819,
+      "delays_missed": 1444214
     }
   ],
   "cost_optimum": {
