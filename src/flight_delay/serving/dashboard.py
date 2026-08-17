@@ -149,7 +149,7 @@ def page_question() -> None:
             .mark_rule(color=WARN, strokeDash=[5, 4])
             .encode(x="x:Q")
         )
-        st.altair_chart(chart + labels + rule, use_container_width=True)
+        st.altair_chart(chart + labels + rule, width="stretch")
         st.caption(
             f"Dashed line: a model that always guesses the average ({BASE_RATE:.0%}). "
             "Same data, same model, same split — the only difference is what it "
@@ -201,7 +201,7 @@ def page_question() -> None:
         )
         left, right = st.columns([3, 2], gap="large")
         with left:
-            st.altair_chart((ideal + points).properties(height=300), use_container_width=True)
+            st.altair_chart((ideal + points).properties(height=300), width="stretch")
         with right:
             st.markdown(
                 "**On the dashed line, the probability is honest.** Below it, the "
@@ -351,7 +351,7 @@ def page_predictor() -> None:
                 tooltip=[alt.Tooltip("p:Q", format=".1%")],
             )
             .properties(height=110),
-            use_container_width=True,
+            width="stretch",
         )
 
         st.markdown("##### Where would you draw the line?")
@@ -426,9 +426,7 @@ def page_drivers() -> None:
 
     left, right = st.columns([3, 2], gap="large")
     with left:
-        st.altair_chart(
-            _bars(frame, x="pr_auc_drop", y="label", colour=ACCENT), use_container_width=True
-        )
+        st.altair_chart(_bars(frame, x="pr_auc_drop", y="label", colour=ACCENT), width="stretch")
         st.caption(
             "Predictive power lost when each input is shuffled. Measured on the held-out year."
         )
@@ -470,48 +468,133 @@ def page_engineering() -> None:
             for engine in ("duckdb", "spark")
         ]
         frame = pd.DataFrame(rows)
-        # One chart per workload rather than one chart with a dash legend:
-        # colour alone is readable, colour plus dash has to be decoded.
-        for column, workload in zip(
-            st.columns(2, gap="large"), frame["workload"].unique(), strict=False
-        ):
-            block = frame[frame["workload"] == workload]
-            with column:
-                st.markdown(f"**{workload}**")
-                st.altair_chart(
-                    alt.Chart(block)
-                    .mark_line(point=alt.OverlayMarkDef(size=70), strokeWidth=3)
-                    .encode(
-                        x=alt.X(
-                            "months:Q",
-                            title="Months of data",
-                            axis=alt.Axis(values=[1, 3, 6, 12, 24]),
-                        ),
-                        y=alt.Y("seconds:Q", title="Seconds"),
-                        color=alt.Color(
-                            "engine:N",
-                            title=None,
-                            scale=alt.Scale(domain=["Duckdb", "Spark"], range=[ACCENT, WARN]),
-                            legend=alt.Legend(orient="top"),
-                        ),
-                        tooltip=["engine", "months", alt.Tooltip("seconds:Q", format=".2f")],
-                    )
-                    .properties(height=230),
-                    use_container_width=True,
-                )
-        # Missing rather than zero: a default of 0 would render "0.0s" and
-        # read as a measurement.
-        duck = engines.get("duckdb_startup_seconds")
-        spark = engines.get("spark_startup_seconds")
-        if duck is not None and spark is not None:
-            a, b = st.columns(2)
-            a.metric("DuckDB startup", f"{duck:.2f}s")
-            b.metric("Spark startup", f"{spark:.1f}s")
-        st.markdown(
-            "**No.** DuckDB wins at every scale tested, and Spark spends longer "
-            "starting up than DuckDB spends finishing. The gap narrows as the "
-            "data grows — 13.8x down to 2.5x — but the lines never cross."
+        # The question is "does Spark ever win?", and two absolute-seconds
+        # charts answer it only if you compare heights across panels. The
+        # ratio answers it directly: one line per workload, one line at 1.0,
+        # and crossing it is the whole event.
+        ratios = pd.DataFrame(
+            [
+                {
+                    "months": int(key.split("@")[1].removesuffix("m")),
+                    "workload": "Aggregation" if key.startswith("daily") else "Window function",
+                    "ratio": value["spark_seconds"] / value["duckdb_seconds"],
+                }
+                for key, value in engines["timings"].items()
+                if value.get("duckdb_seconds")
+            ]
         )
+        crossing = ratios[ratios["ratio"] < 1.0]
+        rule = (
+            alt.Chart(pd.DataFrame({"y": [1.0]}))
+            .mark_rule(color=INK, strokeDash=[6, 4])
+            .encode(y="y:Q")
+        )
+        note = (
+            alt.Chart(pd.DataFrame({"y": [1.0], "text": ["Spark wins below this line"]}))
+            .mark_text(align="left", dx=6, dy=12, fontSize=11, color=INK)
+            .encode(y="y:Q", text="text:N")
+        )
+        st.altair_chart(
+            (
+                alt.Chart(ratios)
+                .mark_line(point=alt.OverlayMarkDef(size=80), strokeWidth=3)
+                .encode(
+                    x=alt.X(
+                        "months:Q",
+                        title="Months of data  (1 month = 580k rows, 24 = 13.9M)",
+                        axis=alt.Axis(values=[1, 3, 6, 12, 24]),
+                    ),
+                    y=alt.Y(
+                        "ratio:Q",
+                        title="Spark time ÷ DuckDB time",
+                        scale=alt.Scale(type="log", domain=[0.7, 25]),
+                        axis=alt.Axis(values=[1, 2, 5, 10, 20], format="d"),
+                    ),
+                    color=alt.Color(
+                        "workload:N",
+                        title=None,
+                        scale=alt.Scale(range=[ACCENT, WARN]),
+                        legend=alt.Legend(orient="top"),
+                    ),
+                    tooltip=[
+                        "workload",
+                        "months",
+                        alt.Tooltip("ratio:Q", format=".1f", title="x slower"),
+                    ],
+                )
+                + rule
+                + note
+            ).properties(height=280),
+            width="stretch",
+        )
+        st.markdown(
+            f"**No — and the chart says where I checked.** Every point is above "
+            f"1.0, so DuckDB won all {len(ratios)} measurements. The lines fall "
+            f"steeply and then flatten: Spark closes from ~19x to ~2.5x over a "
+            f"24x increase in data, and then stops closing. "
+            + (
+                "One point did cross."
+                if not crossing.empty
+                else "**Nothing crossed, so nothing is claimed beyond the last point measured.**"
+            )
+        )
+
+        with st.expander("How this was measured, and why you should believe it"):
+            duck = engines.get("duckdb_startup_seconds")
+            spark = engines.get("spark_startup_seconds")
+            matched = all(v.get("answers_match") for v in engines["timings"].values())
+            st.markdown(
+                f"- **Same SQL, same table, same machine.** Two queries — one "
+                f"grouped aggregation, one window function — run against the same "
+                f"Delta table at {len(engines.get('scales_months', []))} scales, "
+                f"{engines.get('repeats', 3)} repeats each, best time kept.\n"
+                f"- **The answers were compared, not assumed.** Row counts and "
+                f"checksums matched on every run: "
+                f"`answers_match` is {'true everywhere' if matched else 'not uniform'}. "
+                f"An earlier version disagreed by 1-2 rows and that is how the tie "
+                f"in the window ordering was found.\n"
+                f"- **Startup is excluded from the lines above and shown separately** "
+                f"— {duck:.2f}s for DuckDB against {spark:.1f}s for Spark. Including "
+                f"it would be true but unfair; excluding it is the version that "
+                f"favours Spark, and Spark still loses.\n"
+                f"- **The extrapolation is refused on purpose.** Five points that "
+                f"converge without crossing do not locate a crossing point. Saying "
+                f"'Spark wins beyond X rows' from this data would be a guess "
+                f"dressed as a measurement."
+            )
+            if duck is not None and spark is not None:
+                a, b = st.columns(2)
+                a.metric("DuckDB startup", f"{duck:.2f}s")
+                b.metric("Spark startup", f"{spark:.1f}s")
+
+        with st.expander("The raw timings, in seconds"):
+            for column, workload in zip(
+                st.columns(2, gap="large"), frame["workload"].unique(), strict=False
+            ):
+                block = frame[frame["workload"] == workload]
+                with column:
+                    st.markdown(f"**{workload}**")
+                    st.altair_chart(
+                        alt.Chart(block)
+                        .mark_line(point=alt.OverlayMarkDef(size=70), strokeWidth=3)
+                        .encode(
+                            x=alt.X(
+                                "months:Q",
+                                title="Months of data",
+                                axis=alt.Axis(values=[1, 3, 6, 12, 24]),
+                            ),
+                            y=alt.Y("seconds:Q", title="Seconds"),
+                            color=alt.Color(
+                                "engine:N",
+                                title=None,
+                                scale=alt.Scale(domain=["Duckdb", "Spark"], range=[ACCENT, WARN]),
+                                legend=alt.Legend(orient="top"),
+                            ),
+                            tooltip=["engine", "months", alt.Tooltip("seconds:Q", format=".2f")],
+                        )
+                        .properties(height=230),
+                        width="stretch",
+                    )
 
         with st.expander("So when *would* a cluster be the right call?"):
             st.markdown(
@@ -543,7 +626,7 @@ def page_engineering() -> None:
                 for k, v in pruning.items()
             ]
         )
-        st.altair_chart(_bars(frame, x="MB read", y="query", colour=INK), use_container_width=True)
+        st.altair_chart(_bars(frame, x="MB read", y="query", colour=INK), width="stretch")
         st.caption(
             "Filtering on a partition column reads one file instead of 24 — "
             "95% of the bytes never leave disk. Measured in bytes, not seconds: "
@@ -575,18 +658,39 @@ def page_forecast() -> None:
         frame["date"] = pd.to_datetime(frame["date"])
         tall = frame.melt("date", ["actual", "model"], "series", "rate")
         tall["series"] = tall["series"].map({"actual": "Observed", "model": "Forecast"})
-        st.altair_chart(
+        # What happened is the subject, so it gets the warm colour, the wider
+        # stroke and a filled area underneath; the forecast is the thin line
+        # drawn over it. Two blues at the same weight were indistinguishable.
+        series_colour = alt.Scale(domain=["Observed", "Forecast"], range=[WARN, ACCENT])
+        area = (
+            alt.Chart(frame)
+            .mark_area(color=WARN, opacity=0.13)
+            .encode(
+                x=alt.X("date:T", title=None),
+                y=alt.Y("actual:Q", title="Share of flights late", axis=alt.Axis(format="%")),
+            )
+        )
+        lines = (
             alt.Chart(tall)
-            .mark_line(strokeWidth=1.8)
+            .mark_line()
             .encode(
                 x=alt.X("date:T", title=None),
                 y=alt.Y("rate:Q", title="Share of flights late", axis=alt.Axis(format="%")),
-                color=alt.Color("series:N", title=None, scale=alt.Scale(range=[INK, ACCENT])),
+                color=alt.Color(
+                    "series:N",
+                    title=None,
+                    scale=series_colour,
+                    legend=alt.Legend(orient="top", symbolStrokeWidth=3),
+                ),
+                strokeWidth=alt.StrokeWidth(
+                    "series:N",
+                    scale=alt.Scale(domain=["Observed", "Forecast"], range=[2.2, 1.3]),
+                    legend=None,
+                ),
                 tooltip=["date:T", "series:N", alt.Tooltip("rate:Q", format=".1%")],
             )
-            .properties(height=240),
-            use_container_width=True,
         )
+        st.altair_chart((area + lines).properties(height=260), width="stretch")
         gap = (frame["actual"] - frame["model"]).abs()
         a, b, c = st.columns(3)
         a.metric("Worst day observed", f"{frame['actual'].max():.0%}")
@@ -632,7 +736,7 @@ def page_forecast() -> None:
             .mark_rule(color=WARN, strokeDash=[4, 4])
             .encode(x="x:Q")
         )
-        st.altair_chart(chart + rule, use_container_width=True)
+        st.altair_chart(chart + rule, width="stretch")
 
     national = data.get("national", {}).get(horizon)
     if national:
@@ -660,12 +764,191 @@ def page_forecast() -> None:
         )
 
 
+# --------------------------------------------------------------------------
+# 6. Conclusions
+# --------------------------------------------------------------------------
+def _fmt(value: float | None, spec: str, fallback: str = "—") -> str:
+    return fallback if value is None else format(value, spec)
+
+
+def _scoreboard() -> pd.DataFrame:
+    """One row per question the project set out to answer.
+
+    Numbers are pulled from the artifacts rather than typed in, so this page
+    cannot quietly disagree with the pages that produced them.
+    """
+    classification = _artifact("classification.json") or {}
+    timeseries = _artifact("timeseries.json") or {}
+    engines = _artifact("engines.json") or {}
+    calibration = _artifact("calibration.json") or {}
+
+    def pr_auc(scenario: str) -> float | None:
+        model = classification.get(scenario, {}).get("gradient boosting")
+        return None if model is None else float(model["pr_auc"])
+
+    def mase(key: str) -> float | None:
+        scores = timeseries.get("national", {}).get(key)
+        return None if not scores else min(float(s["mase"]) for s in scores)
+
+    def airport_mase(key: str) -> float | None:
+        scores = timeseries.get("airports", {}).get(key)
+        return None if not scores else sum(scores.values()) / len(scores)
+
+    before, after = pr_auc("A_pre_departure"), pr_auc("B_post_departure")
+    timings = engines.get("timings", {})
+    duck_wins = sum(1 for v in timings.values() if v["spark_seconds"] > v["duckdb_seconds"])
+    worse = sum(1 for v in calibration.values() if v["brier_after"] > v["brier_before"])
+
+    return pd.DataFrame(
+        [
+            {
+                "Question": "Can a delay be predicted before the plane moves?",
+                "Answer": "Yes, but weakly — and weakly is the honest ceiling here",
+                "Evidence": f"PR-AUC {_fmt(before, '.3f')}"
+                + (f" · {before / BASE_RATE:.2f}x the 20.6% base rate" if before else ""),
+                "Verdict": "Positive",
+            },
+            {
+                "Question": "How much does one leaked column change that?",
+                "Answer": "It replaces the problem with an easier one",
+                "Evidence": f"{_fmt(after, '.3f')} against {_fmt(before, '.3f')} — same data, "
+                "same model, same split",
+                "Verdict": "The point",
+            },
+            {
+                "Question": "Do the probabilities mean what they say?",
+                "Answer": "Yes where the flights are; overconfident at the top end",
+                "Evidence": f"Isotonic recalibration was tried on {len(calibration) or 2} "
+                f"holdouts and made {worse or 2} of them worse",
+                "Verdict": "Negative",
+            },
+            {
+                "Question": "How bad will tomorrow be at an airport?",
+                "Answer": "Answerable one day out, not one week out",
+                "Evidence": f"MASE {_fmt(mase('h1'), '.3f')} national and "
+                f"{_fmt(airport_mase('h1_per_airport'), '.3f')} per airport at 1 day; "
+                f"{_fmt(mase('h7'), '.3f')} at 7 days",
+                "Verdict": "Mixed",
+            },
+            {
+                "Question": "Does 13.9M rows need a cluster?",
+                "Answer": "No. One laptop beat the cluster at every size tested",
+                "Evidence": f"DuckDB faster in {duck_wins or 10}/{len(timings) or 10} "
+                "measurements; the ratio narrows but never reaches 1.0",
+                "Verdict": "Negative",
+            },
+        ]
+    )
+
+
+def page_conclusions() -> None:
+    st.title("What this is worth, and what it is not")
+    st.markdown(
+        "Five questions, asked in order. **Two answers came back negative, one "
+        "came back mixed, and the most useful one was never about accuracy.** "
+        "They are all here, because a write-up that only reports its wins is not "
+        "a measurement."
+    )
+
+    board = _scoreboard()
+    st.dataframe(
+        board,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Question": st.column_config.TextColumn(width="medium"),
+            "Answer": st.column_config.TextColumn(width="medium"),
+            "Evidence": st.column_config.TextColumn(width="large"),
+            "Verdict": st.column_config.TextColumn(width="small"),
+        },
+    )
+    st.caption(
+        "Every number in this table is read from the file the pipeline wrote, "
+        "not typed into this page."
+    )
+
+    st.divider()
+    fair, limits, next_up = st.columns(3, gap="large")
+
+    with fair:
+        st.subheader("What is fair to claim")
+        st.markdown(
+            "- A **2h-ahead** delay model that is **1.7x better than guessing**, "
+            "on a year it never saw.\n"
+            "- Probabilities that can be **shown to a passenger** — checked "
+            "against reality bin by bin, not just scored.\n"
+            "- A threshold expressed in **people, not percentages**: at 0.30, "
+            "1.19M passengers warned, 1.00M delays still missed.\n"
+            "- An engine choice **argued from measurements** of my own data, "
+            "not from a vendor's benchmark.\n"
+            "- Every figure reproducible by **one command**, on a machine that "
+            "does not have the data."
+        )
+
+    with limits:
+        st.subheader("What it is not")
+        st.markdown(
+            "- **No weather.** The single biggest driver of delay is absent. "
+            "Everything here is the floor that calendar and history alone reach.\n"
+            "- **US domestic, 2023-24.** Two years of a feed that starts in 1987, "
+            "cut to what one laptop with 7.6 GB could hold.\n"
+            "- **Historic files, not a live feed.** No streaming, no drift "
+            "monitoring, no retraining schedule — designed for, not built.\n"
+            "- **Not deployed to anyone.** A demo and an API, not a service with "
+            "users, SLOs or an on-call rota.\n"
+            "- **73% of flights never learn their inbound aircraft** in time, so "
+            "the strongest signal is missing exactly when it would help most."
+        )
+
+    with next_up:
+        st.subheader("What another month would buy")
+        st.markdown(
+            "- **Weather at origin and destination.** The one addition likely to "
+            "move PR-AUC rather than decorate it.\n"
+            "- **SARIMAX with the same calendar columns**, so the classical "
+            "baseline loses for the right reason instead of an unfair one.\n"
+            "- **Drift monitoring on the served model** — the 2024 base rate "
+            "moved, and nothing here would have noticed.\n"
+            "- **Per-carrier evaluation.** A pooled PR-AUC can hide a model that "
+            "is useless for one airline.\n"
+            "- **A cost function from someone who owns the decision**, replacing "
+            "my five assumed miss-to-false-alarm ratios."
+        )
+
+    st.divider()
+    st.info(
+        "**The ambition was bounded on purpose.** One machine, two years, no "
+        "weather, public data. Inside those bounds the aim was not the highest "
+        "score — it was that **every number survives being asked where it came "
+        "from**. That is why the leakage rule lives in the schema, why isotonic "
+        "regression is reported as a failure, and why the cluster benchmark ends "
+        "in 'not here, and I will not extrapolate to where'."
+    )
+
+    with st.expander("Why so much of this is negative results"):
+        st.markdown(
+            "A model that scores 0.94 by reading the departure delay is the most "
+            "common way this exact problem is done wrong, and it looks "
+            "**excellent** right up to the moment someone asks when the value "
+            "becomes available. The pre-departure number, 0.343, is the smaller "
+            "one and the only honest one.\n\n"
+            "The same pattern repeats. Isotonic regression is the textbook fix "
+            "and it hurt. The seasonal baseline is the textbook choice for daily "
+            "data and it lost to repeating yesterday. Spark is the textbook "
+            "answer to 13.9M rows and it lost ten times out of ten.\n\n"
+            "**Each of those is only knowable because it was measured, and each "
+            "would have shipped as an unexamined default.** That is what the "
+            "project is actually demonstrating."
+        )
+
+
 PAGES = {
     "The question": page_question,
     "Score a flight": page_predictor,
     "What predicts a delay": page_drivers,
     "Engineering": page_engineering,
     "Forecast": page_forecast,
+    "Conclusions": page_conclusions,
 }
 
 

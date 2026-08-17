@@ -179,6 +179,7 @@ order.
 | [modelling.md](docs/modelling.md) | Both scenarios, calibration, importance, thresholds |
 | [timeseries.md](docs/timeseries.md) | Daily delay rate, rolling-origin backtest |
 | [benchmarks.md](docs/benchmarks.md) | Partition pruning, clustering, DuckDB vs Spark |
+| [conclusions.md](docs/conclusions.md) | What the five questions answered, and what this is not |
 
 ## Layout
 

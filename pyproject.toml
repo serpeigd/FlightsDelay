@@ -36,7 +36,7 @@ api = [
     "uvicorn[standard]>=0.30",
 ]
 ui = [
-    "streamlit>=1.38",
+    "streamlit>=1.49",
 ]
 tracking = [
     "mlflow>=2.16",
