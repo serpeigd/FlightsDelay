@@ -101,9 +101,9 @@ def _bars(
 def page_question() -> None:
     st.title("Should I leave for the airport?")
     st.markdown(
-        "One in five US flights lands 15+ minutes late. Predicting *which* ones "
-        "is easy **after** the plane pushes back and hard **before** — and only "
-        "the hard version is any use to a passenger."
+        "One in five US flights lands 15+ minutes late. **Easy to predict once "
+        "the plane has pushed back. Hard before.** Only the hard version is any "
+        "use to a passenger."
     )
 
     data = _artifact("classification.json")
@@ -151,18 +151,17 @@ def page_question() -> None:
         )
         st.altair_chart(chart + labels + rule, width="stretch")
         st.caption(
-            f"Dashed line: a model that always guesses the average ({BASE_RATE:.0%}). "
-            "Same data, same model, same split — the only difference is what it "
-            "is allowed to know."
+            f"Dashed line: always guessing the average ({BASE_RATE:.0%}). "
+            "Same data, same model, same split. Only the inputs change."
         )
 
     with right:
         st.metric("Before departure", f"{before:.3f}", f"{before / BASE_RATE:.2f}x the floor")
         st.metric("After departure", f"{after:.3f}", f"{after / BASE_RATE:.2f}x the floor")
         st.markdown(
-            f"**The grey bar is the trap.** A model that quietly uses the actual "
-            f"departure delay scores {after:.2f} and is worthless: at the moment "
-            f"you need the answer, nobody knows it yet."
+            f"**Grey bar: the trap.**\n\n"
+            f"It uses the real departure delay. Scores {after:.2f}. Useless: that "
+            f"number does not exist yet when you need the answer."
         )
 
     calibration = data.get("A_pre_departure", {}).get("gradient boosting", {}).get("calibration")
@@ -204,17 +203,14 @@ def page_question() -> None:
             st.altair_chart((ideal + points).properties(height=300), width="stretch")
         with right:
             st.markdown(
-                "**On the dashed line, the probability is honest.** Below it, the "
-                "model is overconfident.\n\n"
-                "It sits on the line where almost all its mass is, and drifts above "
-                "it at the top — where it says 64%, the real rate is 53%.\n\n"
-                "Those bins are small, and they are exactly the flights a warning "
-                "system would act on."
+                "**On the line: the probability is honest.**\n\n"
+                "It sits on the line where the flights are.\n\n"
+                "At the top it says 64% and reality is 53%. Few flights, but exactly "
+                "the ones a warning system acts on."
             )
             st.caption(
-                "Isotonic recalibration was tried on two different holdouts and "
-                "made both worse. Gradient boosting optimises log loss, a proper "
-                "scoring rule, so it arrives calibrated."
+                "Recalibration tried on two holdouts. Both worse. Gradient boosting "
+                "optimises a proper scoring rule, so it arrives calibrated."
             )
 
     st.divider()
@@ -389,9 +385,9 @@ def page_predictor() -> None:
             n3.metric("Delays missed", f"{chosen['delays_missed']:,}")
 
         st.caption(
-            "There is no correct threshold — it depends on what a missed delay "
-            "costs against a false alarm. At the conventional 50% the service "
-            "warns 0.9% of passengers and catches 2% of delays."
+            "No correct threshold. It depends what a missed delay costs against a "
+            "false alarm. At the usual 50%: warns 0.9% of passengers, catches 2% "
+            "of delays."
         )
 
 
@@ -427,26 +423,19 @@ def page_drivers() -> None:
     left, right = st.columns([3, 2], gap="large")
     with left:
         st.altair_chart(_bars(frame, x="pr_auc_drop", y="label", colour=ACCENT), width="stretch")
-        st.caption(
-            "Predictive power lost when each input is shuffled. Measured on the held-out year."
-        )
+        st.caption("PR-AUC lost when each input is shuffled. Measured on the held-out year.")
     with right:
         st.metric("Strongest single input", frame.iloc[0]["label"])
         st.markdown(
             "**The clock wins, by double.**\n\n"
-            "Delay builds through the day. An 8am departure is a different "
-            "proposition from a 7pm one."
+            "Delay builds through the operating day. 8am and 7pm are different problems."
         )
         st.markdown(
-            "**The hard-won features came fourth.**\n\n"
+            "**My best feature came fourth.**\n\n"
             "The inbound-aircraft columns took the most work in the project. "
-            "They land mid-table. That is the measurement."
+            "Mid-table. That is the measurement."
         )
-        st.info(
-            "**Four inputs measured zero and were removed.** Re-scoring without "
-            "them moved PR-AUC from 0.343 to 0.343 — which is why they were "
-            "measured before being trusted."
-        )
+        st.info("**Four inputs measured zero. Removed.** PR-AUC 0.343 before, 0.343 after.")
 
 
 # --------------------------------------------------------------------------
@@ -490,41 +479,68 @@ def page_engineering() -> None:
         feed_rows = projection.get("estimated_feed_rows")
         fit_rows = memory.get("rows_that_fit")
 
-        if not ratios.empty:
-            # Two vertical rules carry the answer to "would a cluster ever pay
-            # off?": where one machine runs out, and how big the feed actually
-            # is. The measured points sit far to their left, which is the
-            # honest shape of this result.
-            # The two rules land close together on a log axis, so their labels
-            # sit at opposite ends of the y range rather than on top of each
-            # other, and read left from the rule into empty space.
-            marks = [
-                {"rows": fit_rows, "label": "this machine runs out", "colour": WARN, "at": 16.0},
-                {"rows": feed_rows, "label": "the whole feed, 1987-2024", "colour": INK, "at": 0.8},
-            ]
-            marks = [m for m in marks if m["rows"]]
-            limit = max([float(r) for r in ratios["rows"]] + [float(m["rows"]) for m in marks])
+        if not ratios.empty and fit_rows:
+            # The question is "when would I switch?", so the answer is a region
+            # of the x axis, not a line on it. Shading the two zones says it
+            # before anyone reads a label; the measured points then land inside
+            # the left one, which is the whole finding.
+            right_edge = max(float(ratios["rows"].max()), float(feed_rows or 0), fit_rows) * 1.7
+            x_scale = alt.Scale(type="log", domain=[3e5, right_edge])
             x = alt.X(
                 "rows:Q",
-                title="Rows scanned",
-                scale=alt.Scale(type="log", domain=[3e5, limit * 1.6]),
+                title="Rows in the table",
+                scale=x_scale,
                 axis=alt.Axis(format="~s"),
             )
+            zones = pd.DataFrame(
+                [
+                    {"start": 3e5, "end": fit_rows, "colour": ACCENT},
+                    {"start": fit_rows, "end": right_edge, "colour": WARN},
+                ]
+            )
+            captions = pd.DataFrame(
+                [
+                    {
+                        "at": (3e5 * fit_rows) ** 0.5,
+                        "text": "One machine is enough",
+                        "colour": ACCENT,
+                    },
+                    {
+                        "at": (fit_rows * right_edge) ** 0.5,
+                        "text": "Cluster earns its place",
+                        "colour": WARN,
+                    },
+                ]
+            )
             layers = [
+                alt.Chart(zones)
+                .mark_rect(opacity=0.10)
+                .encode(x=x, x2="end:Q", color=alt.Color("colour:N", scale=None, legend=None)),
+                alt.Chart(captions)
+                .mark_text(fontSize=12, fontWeight="bold", baseline="top", dy=4)
+                .encode(
+                    x=alt.X("at:Q", scale=x_scale, title=None),
+                    y=alt.datum(23),
+                    text="text:N",
+                    color=alt.Color("colour:N", scale=None, legend=None),
+                ),
+                alt.Chart(pd.DataFrame({"rows": [fit_rows]}))
+                .mark_rule(color=WARN, strokeWidth=2)
+                .encode(x=x),
                 alt.Chart(ratios)
                 .mark_line(point=alt.OverlayMarkDef(size=80), strokeWidth=3)
                 .encode(
                     x=x,
                     y=alt.Y(
                         "ratio:Q",
-                        title="Spark time ÷ DuckDB time",
-                        scale=alt.Scale(type="log", domain=[0.7, 25]),
+                        title="How many times slower Spark is",
+                        scale=alt.Scale(type="log", domain=[0.7, 30]),
                         axis=alt.Axis(values=[1, 2, 5, 10, 20], format="d"),
                     ),
                     color=alt.Color(
                         "workload:N",
                         title=None,
-                        scale=alt.Scale(range=[ACCENT, WARN]),
+                        scale=alt.Scale(range=[INK, "#6b8fb3"]),
                         legend=alt.Legend(orient="top"),
                     ),
                     tooltip=[
@@ -536,66 +552,54 @@ def page_engineering() -> None:
                 alt.Chart(pd.DataFrame({"y": [1.0]}))
                 .mark_rule(color=INK, strokeDash=[6, 4])
                 .encode(y="y:Q"),
-                alt.Chart(pd.DataFrame({"y": [1.0], "text": ["Spark wins below this line"]}))
-                .mark_text(align="left", dx=6, dy=12, fontSize=11, color=INK)
+                alt.Chart(pd.DataFrame({"y": [1.0], "text": ["Spark faster below this line"]}))
+                .mark_text(align="left", dx=6, dy=11, fontSize=11, color=INK)
                 .encode(y="y:Q", text="text:N"),
             ]
-            for mark in marks:
-                one = pd.DataFrame({"rows": [mark["rows"]], "label": [mark["label"]]})
-                layers.append(
-                    alt.Chart(one)
-                    .mark_rule(color=mark["colour"], strokeDash=[2, 3], strokeWidth=1.5)
-                    .encode(x=x)
-                )
-                layers.append(
-                    alt.Chart(one)
-                    .mark_text(align="right", dx=-5, fontSize=10, color=mark["colour"])
-                    .encode(x=x, y=alt.datum(mark["at"]), text="label:N")
-                )
-            st.altair_chart(alt.layer(*layers).properties(height=300), width="stretch")
+            if feed_rows:
+                feed = pd.DataFrame({"rows": [feed_rows], "text": ["whole feed"]})
+                layers += [
+                    alt.Chart(feed).mark_rule(color=INK, strokeDash=[2, 3]).encode(x=x),
+                    alt.Chart(feed)
+                    .mark_text(align="right", dx=-4, fontSize=10, color=INK)
+                    .encode(x=x, y=alt.datum(0.8), text="text:N"),
+                ]
+            st.altair_chart(alt.layer(*layers).properties(height=320), width="stretch")
+            a, b, c = st.columns(3)
+            a.metric("Measured up to", f"{ratios['rows'].max() / 1e6:.1f}M rows")
+            b.metric("One machine runs out", f"{fit_rows / 1e6:.0f}M rows")
+            if feed_rows:
+                c.metric("Whole feed, 1987-2024", f"{feed_rows / 1e6:.0f}M rows")
 
-        measured_max = int(ratios["rows"].max()) if not ratios.empty else 0
         st.markdown(
-            f"**No — and the chart now says how far away 'ever' is.** Every point "
-            f"is above 1.0, so DuckDB won all {len(ratios)} measurements, closing "
-            f"from ~19x to ~2.5x and then flattening. "
-            f"**The measured range ends at {measured_max / 1e6:.1f}M rows.** "
+            f"**No. DuckDB won all {len(ratios)} measurements**, and the blue zone "
+            f"is where this project lives.\n\n"
             + (
-                f"The whole published feed is about **{feed_rows / 1e6:.0f}M rows** — "
-                f"{projection.get('multiple_of_measured', 0):.0f}x more — and this "
-                f"machine runs out of memory near **{fit_rows / 1e6:.0f}M**. "
-                "So the honest answer to *would a cluster ever pay off* is: not for "
-                "speed at any size measured, and for memory somewhere before the "
-                "feed's full history."
-                if feed_rows and fit_rows
+                f"**Switch when the table stops fitting in memory**, not when the "
+                f"row count looks impressive. On this machine that is "
+                f"{fit_rows / 1e6:.0f}M rows. Speed never justified it."
+                if fit_rows
                 else ""
             )
         )
 
-        with st.expander("How this was measured, and why you should believe it"):
+        with st.expander("How this was measured"):
             duck = engines.get("duckdb_startup_seconds")
             spark = engines.get("spark_startup_seconds")
             matched = all(v.get("answers_match") for v in engines["timings"].values())
             st.markdown(
-                f"- **Same SQL, same table, same machine.** Two queries — one "
-                f"grouped aggregation, one window function — run against the same "
-                f"Delta table at {len(engines.get('scales_months', []))} scales, "
-                f"{engines.get('repeats', 3)} repeats each, best time kept.\n"
-                f"- **The answers were compared, not assumed.** Row counts and "
-                f"checksums matched on every run: "
-                f"`answers_match` is {'true everywhere' if matched else 'not uniform'}. "
-                f"An earlier version disagreed by 1-2 rows and that is how the tie "
-                f"in the window ordering was found.\n"
-                f"- **Startup is excluded from the lines above and shown separately** "
-                f"— {duck:.2f}s for DuckDB against {spark:.1f}s for Spark. Including "
-                f"it would be true but unfair; excluding it is the version that "
-                f"favours Spark, and Spark still loses.\n"
-                f"- **The extrapolation is refused on purpose.** Five points that "
-                f"converge without crossing do not locate a crossing point. Saying "
-                f"'Spark wins beyond X rows' from this data would be a guess "
-                f"dressed as a measurement — which is why the two vertical lines "
-                f"come from a different measurement instead (`flight-delay "
-                f"bench-scale`), not from extending these curves."
+                f"- **Same SQL, same table, same machine.** One aggregation, one "
+                f"window function. {len(engines.get('scales_months', []))} scales, "
+                f"{engines.get('repeats', 3)} repeats.\n"
+                f"- **Answers compared, not assumed.** Row counts and checksums "
+                f"{'matched every run' if matched else 'did not all match'}. An "
+                f"earlier version disagreed by 2 rows: that is how the tie in the "
+                f"window ordering surfaced.\n"
+                f"- **Spark's startup is excluded.** That is the version that "
+                f"favours Spark. It still loses.\n"
+                f"- **No extrapolation.** Five converging points do not locate a "
+                f"crossing. The two rules come from a separate command, "
+                f"`bench-scale`, not from extending these curves."
             )
             if duck is not None and spark is not None:
                 a, b = st.columns(2)
@@ -657,40 +661,32 @@ def page_engineering() -> None:
                     delta_color="inverse",
                 )
             st.markdown(
-                "**This is two years of a feed that opens in October 1987.** The "
-                "limit was my laptop and the time I had, not the source — so "
-                "rather than guess how much more there is, I asked the server: "
-                "one `HEAD` request per monthly archive, reading the published "
-                "size without downloading a byte.\n\n"
-                "**What came back:** "
+                "**Three reasons, and row count is not one of them.**\n\n"
+                "1. The working set stops fitting in memory.\n"
+                "2. The job runs long enough that losing a machine matters.\n"
+                "3. The team's platform is already Spark.\n\n"
+                "**Where that line is here, measured rather than guessed.** I used "
+                "two years. To size the rest I asked the server: one `HEAD` request "
+                "per monthly archive, no download."
                 + (
-                    f"{feed['months_found']} of {feed['months_probed']} months "
-                    f"answered, {feed['compressed_bytes'] / 1e9:.2f} GB compressed. "
-                    f"Calibrating on the 24 months I did download "
-                    f"({projection['rows_per_compressed_gigabyte'] / 1e6:.1f}M rows "
-                    f"per compressed GB, {projection['parquet_bytes_per_row']:.1f} "
-                    f"bytes of Parquet per row) puts the whole feed at about "
-                    f"**{projection['estimated_feed_rows'] / 1e6:.0f}M rows and "
-                    f"{projection['estimated_feed_parquet_bytes'] / 1e9:.1f} GB "
-                    f"curated** — {projection['multiple_of_measured']:.0f}x this "
-                    "project.\n\n"
-                    if feed and projection
+                    f"\n\n- {feed['months_found']} archives exist, "
+                    f"{feed['compressed_bytes'] / 1e9:.2f} GB. I took 9% of it.\n"
+                    f"- Calibrated on those months: "
+                    f"{projection['rows_per_compressed_gigabyte'] / 1e6:.1f}M rows per "
+                    f"compressed GB, {projection['parquet_bytes_per_row']:.1f} bytes of "
+                    f"Parquet per row.\n"
+                    f"- Whole feed: about {projection['estimated_feed_rows'] / 1e6:.0f}M "
+                    f"rows, {projection['estimated_feed_parquet_bytes'] / 1e9:.1f} GB "
+                    f"curated. {projection['multiple_of_measured']:.0f}x this project.\n"
+                    f"- Window workload on {memory['machine_bytes'] / 1e9:.1f} GB of RAM: "
+                    f"runs out near {memory['rows_that_fit'] / 1e6:.0f}M rows."
+                    if feed and projection and memory
                     else ""
                 )
-                + "**So the answer is not 'when you have a lot of data'.** It is: "
-                "**when the working set stops fitting in memory, or when the job "
-                "has to survive a machine dying.** The window function has to "
-                "hold the whole table, so on this machine that is around "
-                + (f"**{memory['rows_that_fit'] / 1e6:.0f}M rows** — " if memory else "")
-                + "before the feed's full history, and nowhere near two years.\n\n"
-                "Two caveats stated rather than buried: the row estimate assumes "
-                "the 1987-2022 archives compress like the 2023-24 ones, and the "
-                "memory figure assumes a working set of about three times the "
-                "Parquet on disk."
+                + "\n\n**Two assumptions, stated:** that 1987-2022 compresses like "
+                "2023-24, and that the working set is about 3x the Parquet on disk."
                 + (
-                    f" The 1990s are also absent from this URL pattern "
-                    f"({', '.join(str(y) for y in feed['absent_years'][:3])}…), so "
-                    "the feed is if anything larger than measured here."
+                    " The 1990s are missing from this URL pattern, so the real feed is larger."
                     if feed.get("absent_years")
                     else ""
                 )
@@ -713,10 +709,9 @@ def page_engineering() -> None:
         )
         st.altair_chart(_bars(frame, x="MB read", y="query", colour=INK), width="stretch")
         st.caption(
-            "Filtering on a partition column reads one file instead of 24 — "
-            "95% of the bytes never leave disk. Measured in bytes, not seconds: "
-            "the same scan ran 2.10s then 0.48s reading identical data, because "
-            "of the page cache."
+            "Filter on a partition column: 1 file instead of 24, 95% of the bytes "
+            "never read. Measured in bytes, not seconds. The same scan ran 2.10s "
+            "then 0.48s on identical data, which is the page cache, not the layout."
         )
 
 
@@ -782,9 +777,9 @@ def page_forecast() -> None:
         b.metric("Typical error", f"{gap.median():.1%}")
         c.metric("Worst miss", f"{gap.max():.1%}")
         st.caption(
-            "Every day of 2024, forecast by a model refitted monthly on everything "
-            "before it. It tracks the weekly rhythm and flattens the spikes — which "
-            "is what an error-minimising objective is built to do."
+            "Every day of 2024. The model is refitted at the start of each month on "
+            "everything before it. It tracks the rhythm and flattens the spikes, "
+            "which is what minimising error does."
         )
         st.divider()
 
@@ -808,7 +803,7 @@ def page_forecast() -> None:
                 x=alt.X(
                     "MASE:Q",
                     scale=alt.Scale(domain=[0, 1.15]),
-                    title="MASE — below 1 beats the baseline",
+                    title="MASE. Below 1 beats the baseline",
                 ),
                 y=alt.Y("airport:N", sort="x", title=None),
                 color=alt.condition(alt.datum.MASE < 1, alt.value(ACCENT), alt.value(WARN)),
@@ -835,17 +830,15 @@ def page_forecast() -> None:
 
     if horizon == "h7":
         st.warning(
-            "**A week out, the national model is 1.3% better than doing nothing.** "
-            "Atlanta ties the baseline exactly. Without weather, this is roughly "
-            "where calendar features and past rates run out — reported as the "
-            "negative result it is."
+            "**A week out: 1.3% better than doing nothing.** Atlanta ties the "
+            "baseline exactly. Without weather, this is where calendar and history "
+            "run out. Reported as the negative result it is."
         )
     else:
         st.success(
-            "**One day ahead the model earns its place**, and more so per airport "
-            "than nationally. Weekly seasonality turned out weak — five points "
-            "between Tuesday and Sunday — so the seasonal baseline loses to "
-            "simply repeating yesterday."
+            "**One day ahead it earns its place**, more per airport than nationally. "
+            "Weekly seasonality is weak here, five points between Tuesday and "
+            "Sunday, so the seasonal baseline loses to repeating yesterday."
         )
 
 
@@ -890,8 +883,7 @@ def _conclusions() -> list[tuple[str, str]]:
 
     return [
         (
-            "Knowing the departure delay is almost the whole problem — "
-            "and nobody knows it in time.",
+            "Knowing the departure delay is almost the whole problem. Nobody knows it in time.",
             f"PR-AUC {_fmt(after, '.3f')} with that one column, {_fmt(before, '.3f')} "
             "without it. Same data, same model, same split.",
         ),
@@ -899,7 +891,7 @@ def _conclusions() -> list[tuple[str, str]]:
             "Two hours ahead, the model works. Only just.",
             f"PR-AUC {_fmt(before, '.3f')}"
             + (
-                f" against a base rate of {BASE_RATE:.1%} — {before / BASE_RATE:.2f}x "
+                f" against a base rate of {BASE_RATE:.1%}. {before / BASE_RATE:.2f}x "
                 "better than guessing, on a year it never saw."
                 if before
                 else "."
@@ -913,16 +905,15 @@ def _conclusions() -> list[tuple[str, str]]:
         (
             "Tomorrow is forecastable. Next week is not.",
             f"MASE {_fmt(mase('h1'), '.3f')} at one day. At seven, "
-            f"{_fmt(mase('h7'), '.3f')} — 1.3% better than doing nothing at all.",
+            f"{_fmt(mase('h7'), '.3f')}: 1.3% better than doing nothing.",
         ),
         (
             "13.9M rows never needed a cluster.",
-            f"The same SQL on both engines: DuckDB faster in {duck_wins or 10} of "
-            f"{len(timings) or 10} measurements, and Spark spends longer starting up "
-            "than DuckDB spends finishing.",
+            f"The same SQL on both engines. DuckDB faster in {duck_wins or 10} of "
+            f"{len(timings) or 10} measurements.",
         ),
         (
-            "One would pay off eventually — for memory, not for speed.",
+            "One would pay off eventually. For memory, not for speed.",
             _feed_evidence(),
         ),
     ]
@@ -941,7 +932,7 @@ def _feed_evidence() -> str:
         return "run `flight-delay bench-scale`"
     return (
         f"The published feed is {feed['months_found']} archives and "
-        f"{feed['compressed_bytes'] / 1e9:.2f} GB — about "
+        f"{feed['compressed_bytes'] / 1e9:.2f} GB, about "
         f"{projection['estimated_feed_rows'] / 1e6:.0f}M rows. This machine runs out of "
         f"memory near {memory['rows_that_fit'] / 1e6:.0f}M."
     )
@@ -949,11 +940,7 @@ def _feed_evidence() -> str:
 
 def page_conclusions() -> None:
     st.title("What the six questions answered")
-    st.markdown(
-        "Three of the six came back negative. They are written up at the same "
-        "length as the other three, because **a report that only lists its wins "
-        "is an advertisement, not a measurement.**"
-    )
+    st.markdown("**Three came back negative. They get the same space as the other three.**")
     st.divider()
 
     for number, (finding, evidence) in enumerate(_conclusions(), start=1):
@@ -966,48 +953,36 @@ def page_conclusions() -> None:
     st.subheader("Fair to claim")
     st.markdown(
         "- **1.7x better than guessing**, two hours ahead, on a year it never saw.\n"
-        "- Probabilities **checked against outcomes bin by bin**, not just scored.\n"
-        "- A threshold in **people, not percentages** — 1.19M warned, 1.00M missed.\n"
-        "- Engine choice **argued from my own measurements**, not a vendor benchmark.\n"
+        "- Probabilities **checked against outcomes**, bin by bin.\n"
+        "- A threshold in **people**: 1.19M warned, 1.00M missed.\n"
+        "- Engine choice **from my own measurements**.\n"
         "- Every figure **reproducible by one command**."
     )
 
     st.subheader("Not claimed")
     st.markdown(
-        "- **No weather** — the biggest driver of delay is simply absent.\n"
-        "- **9% of the feed**: 2023-24 only, from 327 published archives.\n"
-        "- **Batch, not live**: no streaming, no drift monitoring, no retraining.\n"
-        "- **Not deployed to users**: a demo and an API, no SLO, no on-call.\n"
-        "- **73% of flights never learn their inbound aircraft** in time."
+        "- **No weather.** The biggest driver of delay is absent.\n"
+        "- **9% of the feed.** 2023-24 only, out of 327 archives.\n"
+        "- **Batch.** No streaming, no drift monitoring, no retraining.\n"
+        "- **Not deployed.** A demo and an API. No SLO, no on-call.\n"
+        "- **73% of flights** never learn their inbound aircraft in time."
     )
 
-    st.subheader("Next, in order of value")
+    st.subheader("Next")
     st.markdown(
-        "- **Weather at both airports** — the one thing likely to move PR-AUC.\n"
+        "- **Weather at both airports.** The one input likely to move PR-AUC.\n"
         "- **SARIMAX with the same calendar columns**, so the fight is fair.\n"
-        "- **Drift monitoring**: the base rate moved and nothing would have noticed.\n"
-        "- **Per-carrier scores**, because a pooled number can hide a useless model.\n"
-        "- **A real cost function**, replacing my five assumed ratios."
+        "- **Drift monitoring.** The base rate moved and nothing noticed.\n"
+        "- **Per-carrier scores.** A pooled number hides a useless model.\n"
+        "- **A real cost function** instead of five assumed ratios."
     )
 
     st.divider()
     st.info(
-        "**The scope was bounded on purpose** — one machine, two years, public "
-        "data, no weather. Inside it the aim was not the highest score. It was "
-        "that **every number survives being asked where it came from.**"
+        "**Scope bounded on purpose:** one machine, two years, public data, no "
+        "weather. The aim was not the highest score. It was that every number "
+        "survives being asked where it came from."
     )
-
-    with st.expander("Why three of six are negative"):
-        st.markdown(
-            "- Isotonic regression is the **textbook fix** for overconfident "
-            "probabilities. It made them worse.\n"
-            "- The seasonal naive is the **textbook baseline** for daily series. "
-            "It lost to repeating yesterday.\n"
-            "- Spark is the **textbook answer** to 13.9M rows. It lost ten times "
-            "out of ten.\n\n"
-            "**All three would have shipped as defaults nobody checked.** That is "
-            "the actual finding — not the model."
-        )
 
 
 PAGES = {
