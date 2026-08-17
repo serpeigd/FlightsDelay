@@ -172,8 +172,23 @@ working set is about three times the Parquet on disk. The 1990s being absent
 from this URL pattern means the real feed is, if anything, larger.
 
 Note what this is *not*: it is not the ratio curves extended to where they
-cross. Those five points still refuse to locate a crossing. This is a separate
-measurement of a different bound.
+cross. This is a separate measurement of a different bound.
+
+### What the trend alone would say
+
+The dashboard draws the last measured slope forward as a dashed line, because
+"the lines converge" is easier to argue about with a number attached. Taking
+the final two scales in log-log space:
+
+| Workload | Projected parity |
+|---|---|
+| Grouped aggregation | ~89M rows |
+| Window function | ~448M rows |
+
+Both sit past everything measured, and the memory bound (~120M rows) falls
+between them. **The projection is fragile and is labelled as such** — rounding
+the timings to two decimals moves the window-function crossing by roughly 25M
+rows, which is why it is drawn dashed and never quoted as a result.
 
 ### A bug this comparison caught
 

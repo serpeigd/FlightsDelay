@@ -10,6 +10,7 @@ write-up.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from datetime import date
 from typing import Any
@@ -438,6 +439,46 @@ def page_drivers() -> None:
         st.info("**Four inputs measured zero. Removed.** PR-AUC 0.343 before, 0.343 after.")
 
 
+def _slope(block: pd.DataFrame) -> tuple[float, float, float]:
+    """Last measured segment of a ratio curve, in log-log space.
+
+    Returns (last rows, last ratio, slope). The slope comes from the final two
+    points rather than a fit over all five: the early points are dominated by
+    Spark's fixed per-stage overhead, which is exactly the part that stops
+    mattering as the data grows.
+    """
+    tail = block.sort_values("rows").tail(2)
+    (r0, y0), (r1, y1) = tail[["rows", "ratio"]].to_numpy()
+    slope = math.log(y1 / y0) / math.log(r1 / r0)
+    return float(r1), float(y1), float(slope)
+
+
+def _trend_lines(ratios: pd.DataFrame, *, right_edge: float, floor: float) -> pd.DataFrame:
+    """Each curve's last slope, carried to the edge of the chart or the floor."""
+    out: list[dict[str, Any]] = []
+    for workload, block in ratios.groupby("workload"):
+        rows, ratio, slope = _slope(block)
+        if slope >= 0:
+            continue
+        # Stop where the projection would leave the visible y range, so a very
+        # steep trend does not draw a line to nowhere.
+        at_floor = rows * (floor / ratio) ** (1 / slope)
+        end = min(right_edge, at_floor)
+        out.append({"workload": workload, "rows": rows, "ratio": ratio})
+        out.append({"workload": workload, "rows": end, "ratio": ratio * (end / rows) ** slope})
+    return pd.DataFrame(out)
+
+
+def _crossings(ratios: pd.DataFrame) -> dict[str, float]:
+    """Where each extended trend would reach parity with DuckDB."""
+    found: dict[str, float] = {}
+    for workload, block in ratios.groupby("workload"):
+        rows, ratio, slope = _slope(block)
+        if slope < 0:
+            found[str(workload)] = rows * (1.0 / ratio) ** (1 / slope)
+    return found
+
+
 # --------------------------------------------------------------------------
 # 4. Engineering
 # --------------------------------------------------------------------------
@@ -512,6 +553,7 @@ def page_engineering() -> None:
                     },
                 ]
             )
+            trends = _trend_lines(ratios, right_edge=right_edge, floor=0.75)
             layers = [
                 alt.Chart(zones)
                 .mark_rect(opacity=0.10)
@@ -527,6 +569,16 @@ def page_engineering() -> None:
                 alt.Chart(pd.DataFrame({"rows": [fit_rows]}))
                 .mark_rule(color=WARN, strokeWidth=2)
                 .encode(x=x),
+                # Dashed: the last measured slope carried forward. Kept visually
+                # distinct from the solid measured segment because it is an
+                # assumption about the future, not a reading from the past.
+                alt.Chart(trends)
+                .mark_line(strokeDash=[5, 5], strokeWidth=2, opacity=0.75)
+                .encode(
+                    x=x,
+                    y=alt.Y("ratio:Q", scale=alt.Scale(type="log", domain=[0.7, 30])),
+                    color=alt.Color("workload:N", legend=None),
+                ),
                 alt.Chart(ratios)
                 .mark_line(point=alt.OverlayMarkDef(size=80), strokeWidth=3)
                 .encode(
@@ -564,24 +616,21 @@ def page_engineering() -> None:
                     .mark_text(align="right", dx=-4, fontSize=10, color=INK)
                     .encode(x=x, y=alt.datum(0.8), text="text:N"),
                 ]
-            st.altair_chart(alt.layer(*layers).properties(height=320), width="stretch")
-            a, b, c = st.columns(3)
-            a.metric("Measured up to", f"{ratios['rows'].max() / 1e6:.1f}M rows")
-            b.metric("One machine runs out", f"{fit_rows / 1e6:.0f}M rows")
-            if feed_rows:
-                c.metric("Whole feed, 1987-2024", f"{feed_rows / 1e6:.0f}M rows")
+            st.altair_chart(alt.layer(*layers).properties(height=330), width="stretch")
 
-        st.markdown(
-            f"**No. DuckDB won all {len(ratios)} measurements**, and the blue zone "
-            f"is where this project lives.\n\n"
-            + (
-                f"**Switch when the table stops fitting in memory**, not when the "
-                f"row count looks impressive. On this machine that is "
-                f"{fit_rows / 1e6:.0f}M rows. Speed never justified it."
-                if fit_rows
-                else ""
+            crossings = _crossings(ratios)
+            st.markdown(
+                f"**No. DuckDB won all {len(ratios)} measurements** (solid lines).\n\n"
+                f"**Dashed: the same trend carried forward.** Parity only arrives "
+                + ", ".join(
+                    f"near **{rows / 1e6:.0f}M rows** on the {name.lower()}"
+                    for name, rows in sorted(crossings.items(), key=lambda kv: kv[1])
+                )
+                + f". Both are far past anything measured.\n\n"
+                f"**The memory wall lands at {fit_rows / 1e6:.0f}M rows** on this "
+                f"machine, in between the two. That is the reason to switch, not "
+                f"the clock."
             )
-        )
 
         with st.expander("How this was measured"):
             duck = engines.get("duckdb_startup_seconds")
@@ -595,102 +644,50 @@ def page_engineering() -> None:
                 f"{'matched every run' if matched else 'did not all match'}. An "
                 f"earlier version disagreed by 2 rows: that is how the tie in the "
                 f"window ordering surfaced.\n"
-                f"- **Spark's startup is excluded.** That is the version that "
-                f"favours Spark. It still loses.\n"
-                f"- **No extrapolation.** Five converging points do not locate a "
-                f"crossing. The two rules come from a separate command, "
-                f"`bench-scale`, not from extending these curves."
+                f"- **Spark's startup is excluded** ({duck:.2f}s against {spark:.1f}s). "
+                f"That is the version that favours Spark. It still loses.\n"
+                f"- **The dashed lines are the last measured slope, extended.** Five "
+                f"converging points do not prove where a crossing lands. Treat them "
+                f"as the shape of the argument, not as a measurement.\n"
+                f"- **The memory wall is measured separately** by `bench-scale`, "
+                f"which sizes the published feed with one HTTP `HEAD` per monthly "
+                f"archive."
             )
-            if duck is not None and spark is not None:
-                a, b = st.columns(2)
-                a.metric("DuckDB startup", f"{duck:.2f}s")
-                b.metric("Spark startup", f"{spark:.1f}s")
 
-        with st.expander("The raw timings, in seconds"):
-            for column, workload in zip(
-                st.columns(2, gap="large"), frame["workload"].unique(), strict=False
-            ):
-                block = frame[frame["workload"] == workload]
-                with column:
-                    st.markdown(f"**{workload}**")
-                    st.altair_chart(
-                        alt.Chart(block)
-                        .mark_line(point=alt.OverlayMarkDef(size=70), strokeWidth=3)
-                        .encode(
-                            x=alt.X(
-                                "months:Q",
-                                title="Months of data",
-                                axis=alt.Axis(values=[1, 3, 6, 12, 24]),
-                            ),
-                            y=alt.Y("seconds:Q", title="Seconds"),
-                            color=alt.Color(
-                                "engine:N",
-                                title=None,
-                                scale=alt.Scale(domain=["Duckdb", "Spark"], range=[ACCENT, WARN]),
-                                legend=alt.Legend(orient="top"),
-                            ),
-                            tooltip=["engine", "months", alt.Tooltip("seconds:Q", format=".2f")],
-                        )
-                        .properties(height=230),
-                        width="stretch",
-                    )
-
-        with st.expander("So when *would* a cluster be the right call?"):
+        with st.expander("When a cluster is the right call"):
             feed = scale.get("feed", {})
-            if feed and projection:
-                a, b, c, d = st.columns(4)
+            st.markdown(
+                "**Three reasons. Row count is not one of them.**\n\n"
+                "1. The working set stops fitting in memory.\n"
+                "2. The job runs long enough that losing a machine matters.\n"
+                "3. The team's platform is already Spark."
+            )
+            if feed and projection and memory:
+                a, b, c = st.columns(3)
                 a.metric(
                     "The published feed",
                     f"{feed['compressed_bytes'] / 1e9:.2f} GB",
-                    f"{feed['months_found']} monthly archives",
+                    f"{feed['months_found']} archives, I used 9%",
                 )
                 b.metric(
-                    "Estimated rows",
-                    f"{projection['estimated_feed_rows'] / 1e6:.0f}M",
-                    f"{projection['multiple_of_measured']:.0f}x what I used",
+                    "That is about",
+                    f"{projection['estimated_feed_rows'] / 1e6:.0f}M rows",
+                    f"{projection['multiple_of_measured']:.0f}x this project",
                 )
                 c.metric(
-                    "Curated, projected",
-                    f"{projection['estimated_feed_parquet_bytes'] / 1e9:.1f} GB",
-                    f"{projection['parquet_bytes_per_row']:.1f} bytes/row measured",
-                )
-                d.metric(
                     "This machine",
-                    f"{memory['machine_bytes'] / 1e9:.1f} GB",
-                    "does not fit" if not memory["fits"] else "still fits",
+                    f"{memory['machine_bytes'] / 1e9:.1f} GB RAM",
+                    "would not hold it",
                     delta_color="inverse",
                 )
-            st.markdown(
-                "**Three reasons, and row count is not one of them.**\n\n"
-                "1. The working set stops fitting in memory.\n"
-                "2. The job runs long enough that losing a machine matters.\n"
-                "3. The team's platform is already Spark.\n\n"
-                "**Where that line is here, measured rather than guessed.** I used "
-                "two years. To size the rest I asked the server: one `HEAD` request "
-                "per monthly archive, no download."
-                + (
-                    f"\n\n- {feed['months_found']} archives exist, "
-                    f"{feed['compressed_bytes'] / 1e9:.2f} GB. I took 9% of it.\n"
-                    f"- Calibrated on those months: "
+                st.caption(
+                    f"Sized by one HTTP HEAD per monthly archive, then calibrated on "
+                    f"the months I did download: "
                     f"{projection['rows_per_compressed_gigabyte'] / 1e6:.1f}M rows per "
                     f"compressed GB, {projection['parquet_bytes_per_row']:.1f} bytes of "
-                    f"Parquet per row.\n"
-                    f"- Whole feed: about {projection['estimated_feed_rows'] / 1e6:.0f}M "
-                    f"rows, {projection['estimated_feed_parquet_bytes'] / 1e9:.1f} GB "
-                    f"curated. {projection['multiple_of_measured']:.0f}x this project.\n"
-                    f"- Window workload on {memory['machine_bytes'] / 1e9:.1f} GB of RAM: "
-                    f"runs out near {memory['rows_that_fit'] / 1e6:.0f}M rows."
-                    if feed and projection and memory
-                    else ""
+                    f"Parquet per row. Assumes 1987-2022 compresses like 2023-24, and a "
+                    f"working set of 3x the Parquet on disk."
                 )
-                + "\n\n**Two assumptions, stated:** that 1987-2022 compresses like "
-                "2023-24, and that the working set is about 3x the Parquet on disk."
-                + (
-                    " The 1990s are missing from this URL pattern, so the real feed is larger."
-                    if feed.get("absent_years")
-                    else ""
-                )
-            )
 
     st.divider()
     st.subheader("What layout is worth")
