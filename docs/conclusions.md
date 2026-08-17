@@ -5,7 +5,7 @@ mixed, and the most useful one was never about accuracy.
 
 | # | Question | Answer | Evidence | Command |
 |---|---|---|---|---|
-| 1 | Can a delay be predicted before the plane moves? | Yes, weakly — and weakly is the honest ceiling here | PR-AUC **0.343**, 1.67x a base rate of 20.6% | `train` |
+| 1 | Can a delay be predicted before the plane moves? | Yes, weakly — and weakly is the honest ceiling here | PR-AUC **0.343**, 1.65x a base rate of 20.8% | `train` |
 | 2 | How much does one leaked column change that? | It replaces the problem with an easier one | **0.938** against 0.343, same data, same model, same split | `train` |
 | 3 | Do the probabilities mean what they say? | Yes where the flights are; overconfident at the top | Isotonic recalibration tried on two holdouts, **both worse** | `calibrate` |
 | 4 | How bad will tomorrow be at an airport? | Answerable one day out, not one week out | MASE **0.798** national / **0.724** per airport at h=1; **0.987** at h=7 | `forecast` |
