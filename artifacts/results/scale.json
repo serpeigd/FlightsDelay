@@ -1,0 +1,52 @@
+{
+  "rows_per_scale": {
+    "1": 538837,
+    "3": 1621908,
+    "6": 3340569,
+    "12": 6847899,
+    "24": 13926960
+  },
+  "feed": {
+    "months_probed": 456,
+    "months_found": 327,
+    "first_month": [
+      1987,
+      10
+    ],
+    "last_month": [
+      2024,
+      12
+    ],
+    "compressed_bytes": 7704067178,
+    "absent_years": [
+      1990,
+      1991,
+      1992,
+      1993,
+      1994,
+      1995,
+      1996,
+      1997,
+      1998,
+      1999
+    ]
+  },
+  "projection": {
+    "rows_measured": 13926960,
+    "compressed_bytes_measured": 694112854,
+    "parquet_bytes_measured": 318645697,
+    "feed_compressed_bytes": 7704067178,
+    "rows_per_compressed_gigabyte": 20064403,
+    "parquet_bytes_per_row": 22.88,
+    "estimated_feed_rows": 154577508,
+    "estimated_feed_parquet_bytes": 3536698445,
+    "multiple_of_measured": 11.1
+  },
+  "memory": {
+    "machine_bytes": 8207855616,
+    "expansion_assumed": 3.0,
+    "estimated_working_set_bytes": 10610095335,
+    "fits": false,
+    "rows_that_fit": 119579497
+  }
+}

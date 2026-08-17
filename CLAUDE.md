@@ -56,6 +56,7 @@ flight-delay calibrate   # two calibration holdouts (both made it worse)
 flight-delay forecast    # daily delay rate, rolling-origin backtest
 flight-delay bench-layout    # partition pruning, clustering  (needs Java)
 flight-delay bench-engines   # DuckDB vs Spark               (needs Java)
+flight-delay bench-scale     # HEADs every monthly archive; sizes the whole feed
 ```
 
 Each command lives in `src/flight_delay/commands/`. Adding one means adding it

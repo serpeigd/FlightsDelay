@@ -26,6 +26,7 @@ RESULT_FILES = (
     "layout.json",
     "engines.json",
     "clustering.json",
+    "scale.json",
 )
 BUNDLE_FILES = ("model.joblib", "priors.parquet", "routes.parquet", "metadata.json")
 

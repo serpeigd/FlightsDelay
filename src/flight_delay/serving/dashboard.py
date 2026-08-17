@@ -468,42 +468,53 @@ def page_engineering() -> None:
             for engine in ("duckdb", "spark")
         ]
         frame = pd.DataFrame(rows)
-        # The question is "does Spark ever win?", and two absolute-seconds
-        # charts answer it only if you compare heights across panels. The
-        # ratio answers it directly: one line per workload, one line at 1.0,
-        # and crossing it is the whole event.
+        scale = _artifact("scale.json") or {}
+        # Rows, not months. Months only mean something for this feed, and the
+        # x axis has to hold both what was measured and the size of the whole
+        # feed for the comparison to mean anything.
+        rows_by_months = {int(k): int(v) for k, v in scale.get("rows_per_scale", {}).items()}
         ratios = pd.DataFrame(
             [
                 {
-                    "months": int(key.split("@")[1].removesuffix("m")),
+                    "rows": rows_by_months[months],
                     "workload": "Aggregation" if key.startswith("daily") else "Window function",
                     "ratio": value["spark_seconds"] / value["duckdb_seconds"],
                 }
                 for key, value in engines["timings"].items()
                 if value.get("duckdb_seconds")
+                and (months := int(key.split("@")[1].removesuffix("m"))) in rows_by_months
             ]
         )
-        crossing = ratios[ratios["ratio"] < 1.0]
-        rule = (
-            alt.Chart(pd.DataFrame({"y": [1.0]}))
-            .mark_rule(color=INK, strokeDash=[6, 4])
-            .encode(y="y:Q")
-        )
-        note = (
-            alt.Chart(pd.DataFrame({"y": [1.0], "text": ["Spark wins below this line"]}))
-            .mark_text(align="left", dx=6, dy=12, fontSize=11, color=INK)
-            .encode(y="y:Q", text="text:N")
-        )
-        st.altair_chart(
-            (
+        projection = scale.get("projection", {})
+        memory = scale.get("memory", {})
+        feed_rows = projection.get("estimated_feed_rows")
+        fit_rows = memory.get("rows_that_fit")
+
+        if not ratios.empty:
+            # Two vertical rules carry the answer to "would a cluster ever pay
+            # off?": where one machine runs out, and how big the feed actually
+            # is. The measured points sit far to their left, which is the
+            # honest shape of this result.
+            # The two rules land close together on a log axis, so their labels
+            # sit at opposite ends of the y range rather than on top of each
+            # other, and read left from the rule into empty space.
+            marks = [
+                {"rows": fit_rows, "label": "this machine runs out", "colour": WARN, "at": 16.0},
+                {"rows": feed_rows, "label": "the whole feed, 1987-2024", "colour": INK, "at": 0.8},
+            ]
+            marks = [m for m in marks if m["rows"]]
+            limit = max([float(r) for r in ratios["rows"]] + [float(m["rows"]) for m in marks])
+            x = alt.X(
+                "rows:Q",
+                title="Rows scanned",
+                scale=alt.Scale(type="log", domain=[3e5, limit * 1.6]),
+                axis=alt.Axis(format="~s"),
+            )
+            layers = [
                 alt.Chart(ratios)
                 .mark_line(point=alt.OverlayMarkDef(size=80), strokeWidth=3)
                 .encode(
-                    x=alt.X(
-                        "months:Q",
-                        title="Months of data  (1 month = 580k rows, 24 = 13.9M)",
-                        axis=alt.Axis(values=[1, 3, 6, 12, 24]),
-                    ),
+                    x=x,
                     y=alt.Y(
                         "ratio:Q",
                         title="Spark time ÷ DuckDB time",
@@ -518,24 +529,46 @@ def page_engineering() -> None:
                     ),
                     tooltip=[
                         "workload",
-                        "months",
+                        alt.Tooltip("rows:Q", format=",", title="rows"),
                         alt.Tooltip("ratio:Q", format=".1f", title="x slower"),
                     ],
+                ),
+                alt.Chart(pd.DataFrame({"y": [1.0]}))
+                .mark_rule(color=INK, strokeDash=[6, 4])
+                .encode(y="y:Q"),
+                alt.Chart(pd.DataFrame({"y": [1.0], "text": ["Spark wins below this line"]}))
+                .mark_text(align="left", dx=6, dy=12, fontSize=11, color=INK)
+                .encode(y="y:Q", text="text:N"),
+            ]
+            for mark in marks:
+                one = pd.DataFrame({"rows": [mark["rows"]], "label": [mark["label"]]})
+                layers.append(
+                    alt.Chart(one)
+                    .mark_rule(color=mark["colour"], strokeDash=[2, 3], strokeWidth=1.5)
+                    .encode(x=x)
                 )
-                + rule
-                + note
-            ).properties(height=280),
-            width="stretch",
-        )
+                layers.append(
+                    alt.Chart(one)
+                    .mark_text(align="right", dx=-5, fontSize=10, color=mark["colour"])
+                    .encode(x=x, y=alt.datum(mark["at"]), text="label:N")
+                )
+            st.altair_chart(alt.layer(*layers).properties(height=300), width="stretch")
+
+        measured_max = int(ratios["rows"].max()) if not ratios.empty else 0
         st.markdown(
-            f"**No — and the chart says where I checked.** Every point is above "
-            f"1.0, so DuckDB won all {len(ratios)} measurements. The lines fall "
-            f"steeply and then flatten: Spark closes from ~19x to ~2.5x over a "
-            f"24x increase in data, and then stops closing. "
+            f"**No — and the chart now says how far away 'ever' is.** Every point "
+            f"is above 1.0, so DuckDB won all {len(ratios)} measurements, closing "
+            f"from ~19x to ~2.5x and then flattening. "
+            f"**The measured range ends at {measured_max / 1e6:.1f}M rows.** "
             + (
-                "One point did cross."
-                if not crossing.empty
-                else "**Nothing crossed, so nothing is claimed beyond the last point measured.**"
+                f"The whole published feed is about **{feed_rows / 1e6:.0f}M rows** — "
+                f"{projection.get('multiple_of_measured', 0):.0f}x more — and this "
+                f"machine runs out of memory near **{fit_rows / 1e6:.0f}M**. "
+                "So the honest answer to *would a cluster ever pay off* is: not for "
+                "speed at any size measured, and for memory somewhere before the "
+                "feed's full history."
+                if feed_rows and fit_rows
+                else ""
             )
         )
 
@@ -560,7 +593,9 @@ def page_engineering() -> None:
                 f"- **The extrapolation is refused on purpose.** Five points that "
                 f"converge without crossing do not locate a crossing point. Saying "
                 f"'Spark wins beyond X rows' from this data would be a guess "
-                f"dressed as a measurement."
+                f"dressed as a measurement — which is why the two vertical lines "
+                f"come from a different measurement instead (`flight-delay "
+                f"bench-scale`), not from extending these curves."
             )
             if duck is not None and spark is not None:
                 a, b = st.columns(2)
@@ -597,18 +632,68 @@ def page_engineering() -> None:
                     )
 
         with st.expander("So when *would* a cluster be the right call?"):
+            feed = scale.get("feed", {})
+            if feed and projection:
+                a, b, c, d = st.columns(4)
+                a.metric(
+                    "The published feed",
+                    f"{feed['compressed_bytes'] / 1e9:.2f} GB",
+                    f"{feed['months_found']} monthly archives",
+                )
+                b.metric(
+                    "Estimated rows",
+                    f"{projection['estimated_feed_rows'] / 1e6:.0f}M",
+                    f"{projection['multiple_of_measured']:.0f}x what I used",
+                )
+                c.metric(
+                    "Curated, projected",
+                    f"{projection['estimated_feed_parquet_bytes'] / 1e9:.1f} GB",
+                    f"{projection['parquet_bytes_per_row']:.1f} bytes/row measured",
+                )
+                d.metric(
+                    "This machine",
+                    f"{memory['machine_bytes'] / 1e9:.1f} GB",
+                    "does not fit" if not memory["fits"] else "still fits",
+                    delta_color="inverse",
+                )
             st.markdown(
-                "**This is two years of a feed that goes back to 1987.** The "
-                "limit was my laptop and the time I had, not the source.\n\n"
-                "Extrapolating from what is measured here: two years is 13.9M "
-                "rows and 475 MB of Parquet, and the window-function workload "
-                "has to hold the whole table. This machine has 7.6 GB. So the "
-                "point where one machine stops being enough is somewhere around "
-                "**200-300M rows — roughly the entire history of the feed.**\n\n"
-                "That is the honest answer, and it is not 'when you have a lot "
-                "of data'. It is: **when the working set stops fitting in "
-                "memory, or when the job has to survive a machine dying.** "
-                "Neither is true at two years, so neither is claimed."
+                "**This is two years of a feed that opens in October 1987.** The "
+                "limit was my laptop and the time I had, not the source — so "
+                "rather than guess how much more there is, I asked the server: "
+                "one `HEAD` request per monthly archive, reading the published "
+                "size without downloading a byte.\n\n"
+                "**What came back:** "
+                + (
+                    f"{feed['months_found']} of {feed['months_probed']} months "
+                    f"answered, {feed['compressed_bytes'] / 1e9:.2f} GB compressed. "
+                    f"Calibrating on the 24 months I did download "
+                    f"({projection['rows_per_compressed_gigabyte'] / 1e6:.1f}M rows "
+                    f"per compressed GB, {projection['parquet_bytes_per_row']:.1f} "
+                    f"bytes of Parquet per row) puts the whole feed at about "
+                    f"**{projection['estimated_feed_rows'] / 1e6:.0f}M rows and "
+                    f"{projection['estimated_feed_parquet_bytes'] / 1e9:.1f} GB "
+                    f"curated** — {projection['multiple_of_measured']:.0f}x this "
+                    "project.\n\n"
+                    if feed and projection
+                    else ""
+                )
+                + "**So the answer is not 'when you have a lot of data'.** It is: "
+                "**when the working set stops fitting in memory, or when the job "
+                "has to survive a machine dying.** The window function has to "
+                "hold the whole table, so on this machine that is around "
+                + (f"**{memory['rows_that_fit'] / 1e6:.0f}M rows** — " if memory else "")
+                + "before the feed's full history, and nowhere near two years.\n\n"
+                "Two caveats stated rather than buried: the row estimate assumes "
+                "the 1987-2022 archives compress like the 2023-24 ones, and the "
+                "memory figure assumes a working set of about three times the "
+                "Parquet on disk."
+                + (
+                    f" The 1990s are also absent from this URL pattern "
+                    f"({', '.join(str(y) for y in feed['absent_years'][:3])}…), so "
+                    "the feed is if anything larger than measured here."
+                    if feed.get("absent_years")
+                    else ""
+                )
             )
 
     st.divider()
@@ -771,8 +856,12 @@ def _fmt(value: float | None, spec: str, fallback: str = "—") -> str:
     return fallback if value is None else format(value, spec)
 
 
-def _scoreboard() -> pd.DataFrame:
-    """One row per question the project set out to answer.
+def _conclusions() -> list[tuple[str, str, str, str]]:
+    """One line per question the project set out to answer.
+
+    Returned as (colour, verdict, claim, number) rather than rendered here, and
+    as text rather than as a table: a five-column table is unreadable the
+    moment the sidebar is open, and this page is meant to be read, not parsed.
 
     Numbers are pulled from the artifacts rather than typed in, so this page
     cannot quietly disagree with the pages that produced them.
@@ -799,146 +888,128 @@ def _scoreboard() -> pd.DataFrame:
     duck_wins = sum(1 for v in timings.values() if v["spark_seconds"] > v["duckdb_seconds"])
     worse = sum(1 for v in calibration.values() if v["brier_after"] > v["brier_before"])
 
-    return pd.DataFrame(
-        [
-            {
-                "Question": "Can a delay be predicted before the plane moves?",
-                "Answer": "Yes, but weakly — and weakly is the honest ceiling here",
-                "Evidence": f"PR-AUC {_fmt(before, '.3f')}"
-                + (f" · {before / BASE_RATE:.2f}x the 20.6% base rate" if before else ""),
-                "Verdict": "Positive",
-            },
-            {
-                "Question": "How much does one leaked column change that?",
-                "Answer": "It replaces the problem with an easier one",
-                "Evidence": f"{_fmt(after, '.3f')} against {_fmt(before, '.3f')} — same data, "
-                "same model, same split",
-                "Verdict": "The point",
-            },
-            {
-                "Question": "Do the probabilities mean what they say?",
-                "Answer": "Yes where the flights are; overconfident at the top end",
-                "Evidence": f"Isotonic recalibration was tried on {len(calibration) or 2} "
-                f"holdouts and made {worse or 2} of them worse",
-                "Verdict": "Negative",
-            },
-            {
-                "Question": "How bad will tomorrow be at an airport?",
-                "Answer": "Answerable one day out, not one week out",
-                "Evidence": f"MASE {_fmt(mase('h1'), '.3f')} national and "
-                f"{_fmt(airport_mase('h1_per_airport'), '.3f')} per airport at 1 day; "
-                f"{_fmt(mase('h7'), '.3f')} at 7 days",
-                "Verdict": "Mixed",
-            },
-            {
-                "Question": "Does 13.9M rows need a cluster?",
-                "Answer": "No. One laptop beat the cluster at every size tested",
-                "Evidence": f"DuckDB faster in {duck_wins or 10}/{len(timings) or 10} "
-                "measurements; the ratio narrows but never reaches 1.0",
-                "Verdict": "Negative",
-            },
-        ]
+    return [
+        (
+            "blue",
+            "The point",
+            "One leaked column replaces the problem with an easier one",
+            f"{_fmt(after, '.3f')} with the departure delay, {_fmt(before, '.3f')} without it "
+            "— same data, same model, same split",
+        ),
+        (
+            "green",
+            "Works",
+            "A delay can be predicted two hours ahead, but only weakly",
+            f"PR-AUC {_fmt(before, '.3f')}"
+            + (f", {before / BASE_RATE:.2f}x a base rate of 20.6%" if before else ""),
+        ),
+        (
+            "red",
+            "Failed",
+            "Textbook recalibration made the probabilities worse, twice",
+            f"Isotonic regression, {len(calibration) or 2} holdouts, "
+            f"{worse or 2} worse Brier scores",
+        ),
+        (
+            "orange",
+            "Half",
+            "Tomorrow is forecastable, next week is not",
+            f"MASE {_fmt(mase('h1'), '.3f')} at one day, "
+            f"{_fmt(mase('h7'), '.3f')} at seven — 1.3% better than doing nothing",
+        ),
+        (
+            "red",
+            "Failed",
+            "13.9M rows never needed a cluster",
+            f"DuckDB faster in {duck_wins or 10} of {len(timings) or 10} measurements",
+        ),
+        (
+            "grey",
+            "Bounded",
+            "A cluster would pay off eventually — for memory, not for speed",
+            _feed_evidence(),
+        ),
+    ]
+
+
+def _feed_evidence() -> str:
+    """The size of the feed, measured by asking the publisher rather than by
+    extending a curve."""
+    scale = _artifact("scale.json") or {}
+    feed, projection, memory = (
+        scale.get("feed") or {},
+        scale.get("projection") or {},
+        scale.get("memory") or {},
+    )
+    if not (feed and projection and memory):
+        return "run `flight-delay bench-scale`"
+    return (
+        f"{feed['months_found']} archives exist, "
+        f"{feed['compressed_bytes'] / 1e9:.2f} GB ≈ "
+        f"{projection['estimated_feed_rows'] / 1e6:.0f}M rows; this machine runs out near "
+        f"{memory['rows_that_fit'] / 1e6:.0f}M"
     )
 
 
 def page_conclusions() -> None:
-    st.title("What this is worth, and what it is not")
+    st.title("Six questions, six answers")
     st.markdown(
-        "Five questions, asked in order. **Two answers came back negative, one "
-        "came back mixed, and the most useful one was never about accuracy.** "
-        "They are all here, because a write-up that only reports its wins is not "
-        "a measurement."
+        "**Three of them came back negative.** They are here for the same reason "
+        "as the positive ones: a write-up that only reports its wins is not a "
+        "measurement."
     )
 
-    board = _scoreboard()
-    st.dataframe(
-        board,
-        hide_index=True,
-        width="stretch",
-        column_config={
-            "Question": st.column_config.TextColumn(width="medium"),
-            "Answer": st.column_config.TextColumn(width="medium"),
-            "Evidence": st.column_config.TextColumn(width="large"),
-            "Verdict": st.column_config.TextColumn(width="small"),
-        },
-    )
-    st.caption(
-        "Every number in this table is read from the file the pipeline wrote, "
-        "not typed into this page."
-    )
+    for colour, verdict, claim, number in _conclusions():
+        st.markdown(f"##### :{colour}[{verdict}] · {claim}")
+        st.caption(number)
 
+    st.caption("Every figure above is read from the file the pipeline wrote.")
     st.divider()
-    fair, limits, next_up = st.columns(3, gap="large")
 
-    with fair:
-        st.subheader("What is fair to claim")
-        st.markdown(
-            "- A **2h-ahead** delay model that is **1.7x better than guessing**, "
-            "on a year it never saw.\n"
-            "- Probabilities that can be **shown to a passenger** — checked "
-            "against reality bin by bin, not just scored.\n"
-            "- A threshold expressed in **people, not percentages**: at 0.30, "
-            "1.19M passengers warned, 1.00M delays still missed.\n"
-            "- An engine choice **argued from measurements** of my own data, "
-            "not from a vendor's benchmark.\n"
-            "- Every figure reproducible by **one command**, on a machine that "
-            "does not have the data."
-        )
+    st.subheader("Fair to claim")
+    st.markdown(
+        "- **1.7x better than guessing**, two hours ahead, on a year it never saw.\n"
+        "- Probabilities **checked against outcomes bin by bin**, not just scored.\n"
+        "- A threshold in **people, not percentages** — 1.19M warned, 1.00M missed.\n"
+        "- Engine choice **argued from my own measurements**, not a vendor benchmark.\n"
+        "- Every figure **reproducible by one command**."
+    )
 
-    with limits:
-        st.subheader("What it is not")
-        st.markdown(
-            "- **No weather.** The single biggest driver of delay is absent. "
-            "Everything here is the floor that calendar and history alone reach.\n"
-            "- **US domestic, 2023-24.** Two years of a feed that starts in 1987, "
-            "cut to what one laptop with 7.6 GB could hold.\n"
-            "- **Historic files, not a live feed.** No streaming, no drift "
-            "monitoring, no retraining schedule — designed for, not built.\n"
-            "- **Not deployed to anyone.** A demo and an API, not a service with "
-            "users, SLOs or an on-call rota.\n"
-            "- **73% of flights never learn their inbound aircraft** in time, so "
-            "the strongest signal is missing exactly when it would help most."
-        )
+    st.subheader("Not claimed")
+    st.markdown(
+        "- **No weather** — the biggest driver of delay is simply absent.\n"
+        "- **9% of the feed**: 2023-24 only, from 327 published archives.\n"
+        "- **Batch, not live**: no streaming, no drift monitoring, no retraining.\n"
+        "- **Not deployed to users**: a demo and an API, no SLO, no on-call.\n"
+        "- **73% of flights never learn their inbound aircraft** in time."
+    )
 
-    with next_up:
-        st.subheader("What another month would buy")
-        st.markdown(
-            "- **Weather at origin and destination.** The one addition likely to "
-            "move PR-AUC rather than decorate it.\n"
-            "- **SARIMAX with the same calendar columns**, so the classical "
-            "baseline loses for the right reason instead of an unfair one.\n"
-            "- **Drift monitoring on the served model** — the 2024 base rate "
-            "moved, and nothing here would have noticed.\n"
-            "- **Per-carrier evaluation.** A pooled PR-AUC can hide a model that "
-            "is useless for one airline.\n"
-            "- **A cost function from someone who owns the decision**, replacing "
-            "my five assumed miss-to-false-alarm ratios."
-        )
+    st.subheader("Next, in order of value")
+    st.markdown(
+        "- **Weather at both airports** — the one thing likely to move PR-AUC.\n"
+        "- **SARIMAX with the same calendar columns**, so the fight is fair.\n"
+        "- **Drift monitoring**: the base rate moved and nothing would have noticed.\n"
+        "- **Per-carrier scores**, because a pooled number can hide a useless model.\n"
+        "- **A real cost function**, replacing my five assumed ratios."
+    )
 
     st.divider()
     st.info(
-        "**The ambition was bounded on purpose.** One machine, two years, no "
-        "weather, public data. Inside those bounds the aim was not the highest "
-        "score — it was that **every number survives being asked where it came "
-        "from**. That is why the leakage rule lives in the schema, why isotonic "
-        "regression is reported as a failure, and why the cluster benchmark ends "
-        "in 'not here, and I will not extrapolate to where'."
+        "**The scope was bounded on purpose** — one machine, two years, public "
+        "data, no weather. Inside it the aim was not the highest score. It was "
+        "that **every number survives being asked where it came from.**"
     )
 
-    with st.expander("Why so much of this is negative results"):
+    with st.expander("Why three of six are negative"):
         st.markdown(
-            "A model that scores 0.94 by reading the departure delay is the most "
-            "common way this exact problem is done wrong, and it looks "
-            "**excellent** right up to the moment someone asks when the value "
-            "becomes available. The pre-departure number, 0.343, is the smaller "
-            "one and the only honest one.\n\n"
-            "The same pattern repeats. Isotonic regression is the textbook fix "
-            "and it hurt. The seasonal baseline is the textbook choice for daily "
-            "data and it lost to repeating yesterday. Spark is the textbook "
-            "answer to 13.9M rows and it lost ten times out of ten.\n\n"
-            "**Each of those is only knowable because it was measured, and each "
-            "would have shipped as an unexamined default.** That is what the "
-            "project is actually demonstrating."
+            "- Isotonic regression is the **textbook fix** for overconfident "
+            "probabilities. It made them worse.\n"
+            "- The seasonal naive is the **textbook baseline** for daily series. "
+            "It lost to repeating yesterday.\n"
+            "- Spark is the **textbook answer** to 13.9M rows. It lost ten times "
+            "out of ten.\n\n"
+            "**All three would have shipped as defaults nobody checked.** That is "
+            "the actual finding — not the model."
         )
 
 

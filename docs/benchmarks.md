@@ -132,6 +132,49 @@ operational shape, not row count.
 Which is why this project ships both, and why 13.9M rows are described as
 13.9M rows rather than as "big data".
 
+### How far away is "ever"?
+
+`flight-delay bench-scale`
+
+"The crossover is about memory" is only useful with a number attached, and the
+number needs the size of the feed the project did *not* take. That is
+measurable without downloading it: **one HTTP `HEAD` per monthly archive, read
+`Content-Length`.**
+
+| | |
+|---|---|
+| Archives probed | 456 (Jan 1987 – Dec 2024) |
+| Archives published | **327**, October 1987 to December 2024 |
+| Total, compressed | **7.70 GB** |
+| Absent under this name | 1990–1999 |
+| Downloaded for this project | 694 MB — **9% of the feed** |
+
+Calibrating on the 24 months where both numbers are known exactly:
+
+| Measured | Value |
+|---|---|
+| Rows per compressed GB | 20.1M |
+| Curated Parquet per row | 22.88 bytes |
+| Rows at each benchmark scale | 538,837 / 1,621,908 / 3,340,569 / 6,847,899 / 13,926,960 |
+
+| Projected (estimate) | Value |
+|---|---|
+| Whole feed | **~155M rows**, 11.1x this project |
+| Curated | **~3.5 GB** of Parquet |
+| Working set, window workload (Parquet x3) | ~10.6 GB |
+| This machine | 8.2 GB — **does not fit** |
+| One machine runs out at | **~120M rows** |
+
+**So a cluster would pay off somewhere before the feed's full history, and for
+memory rather than for speed.** Two assumptions are load-bearing and stated
+rather than buried: that 1987–2022 compresses like 2023–24, and that the
+working set is about three times the Parquet on disk. The 1990s being absent
+from this URL pattern means the real feed is, if anything, larger.
+
+Note what this is *not*: it is not the ratio curves extended to where they
+cross. Those five points still refuse to locate a crossing. This is a separate
+measurement of a different bound.
+
 ### A bug this comparison caught
 
 Running both engines on the same SQL and comparing checksums found something a

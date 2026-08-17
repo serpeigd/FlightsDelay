@@ -7,14 +7,23 @@ is just to reproduce the modelling results.
 
 from __future__ import annotations
 
+import os
 import time
+from pathlib import Path
 from typing import Any
 
 from flight_delay.bench.engines import WORKLOADS, run_duckdb, run_spark
 from flight_delay.bench.layout import describe, write_delta
+from flight_delay.bench.scale import (
+    FEED_START_YEAR,
+    Projection,
+    memory_verdict,
+    probe_feed,
+    rows_per_scale,
+)
 from flight_delay.bench.scan import ScanResult, measure
 from flight_delay.commands._common import duckdb_connection, log, write_result
-from flight_delay.config import Paths
+from flight_delay.config import YEARS, Paths
 from flight_delay.spark import DeltaUnavailableError, session
 
 #: Aggregating a column forces a real read. `count(*)` alone is answered from
@@ -170,4 +179,102 @@ def cmd_bench_engines(paths: Paths) -> int:
     if mismatches:
         log(f"\n{mismatches} scale(s) where the two engines disagreed")
         return 1
+    return 0
+
+
+def _directory_bytes(directory: Path, pattern: str) -> int:
+    return sum(f.stat().st_size for f in directory.rglob(pattern) if f.is_file())
+
+
+def _machine_bytes() -> int:
+    """Physical memory, or 0 where the platform will not say."""
+    try:
+        return int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES"))
+    except (ValueError, OSError, AttributeError):
+        return 0
+
+
+def cmd_scale(paths: Paths) -> int:
+    """How large is the feed really, and where does one machine run out?
+
+    The engine benchmark measures five points and refuses to extrapolate a
+    crossing point. This command measures the axis those points sit on: the
+    published size of every month in the feed, taken from the server rather
+    than assumed, and what the whole of it would weigh curated.
+    """
+    parquet = paths.table("flights_duckdb")
+    if not parquet.is_dir():
+        log("no curated table; run `flight-delay curate` first")
+        return 1
+
+    table = f"read_parquet('{parquet}/**/*.parquet', hive_partitioning=true)"
+    with duckdb_connection(paths) as con:
+        per_scale = rows_per_scale(con, table, SCALES)
+        counted = con.execute(f"SELECT count(*) FROM {table}").fetchone()
+        rows_total = int(counted[0]) if counted else 0
+
+    log("== rows actually scanned at each benchmark scale ==")
+    for months, rows in per_scale.items():
+        log(f"  {months:>2} months  {rows:>12,} rows")
+
+    parquet_bytes = _directory_bytes(parquet, "*.parquet")
+    zip_bytes = _directory_bytes(paths.raw, "*.zip")
+    log(f"\ncurated parquet   {parquet_bytes / 1e6:8.1f} MB for {rows_total:,} rows")
+    log(f"downloaded ZIPs   {zip_bytes / 1e6:8.1f} MB")
+
+    years = range(FEED_START_YEAR, max(YEARS) + 1)
+    log(f"\n== probing every monthly archive, {FEED_START_YEAR}-{max(YEARS)} (HEAD only) ==")
+    start = time.perf_counter()
+    feed = probe_feed(years)
+    log(f"  {feed.found} of {feed.probed} months answered in {time.perf_counter() - start:.0f}s")
+    if feed.found == 0:
+        log("  nothing answered — the projection needs the network, so it is skipped")
+        write_result(paths, "scale.json", {"rows_per_scale": per_scale, "feed": None})
+        return 1
+    log(f"  span              {feed.first_month} to {feed.last_month}")
+    log(f"  published total   {feed.compressed_gigabytes:.2f} GB compressed")
+    if feed.absent_years:
+        log(f"  no archive under this name for: {', '.join(str(y) for y in feed.absent_years)}")
+
+    projection = Projection(
+        rows_measured=rows_total,
+        compressed_bytes_measured=zip_bytes,
+        parquet_bytes_measured=parquet_bytes,
+        feed_compressed_bytes=feed.compressed_bytes,
+    )
+    log("\n== projecting the whole feed from what was measured on 24 months ==")
+    log(f"  {projection.rows_per_compressed_byte * 1e9:,.0f} rows per compressed GB")
+    log(f"  {projection.parquet_bytes_per_row:.2f} bytes of curated Parquet per row")
+    log(f"  => {projection.estimated_feed_rows:,} rows (estimate)")
+    log(f"  => {projection.estimated_feed_parquet_bytes / 1e9:.2f} GB curated (estimate)")
+    log(f"  => {projection.multiple_of_measured:.1f}x what this project used")
+
+    machine = _machine_bytes()
+    verdict = memory_verdict(projection, machine_bytes=machine)
+    log("\n== does the whole feed still fit on one machine? ==")
+    log(f"  this machine       {machine / 1e9:.1f} GB")
+    log(
+        f"  working set        {verdict['estimated_working_set_bytes'] / 1e9:.1f} GB "
+        f"(Parquet x{verdict['expansion_assumed']:.0f}, assumed)"
+    )
+    log(f"  fits               {verdict['fits']}")
+    log(f"  runs out at        ~{verdict['rows_that_fit']:,} rows")
+
+    write_result(
+        paths,
+        "scale.json",
+        {
+            "rows_per_scale": {str(k): v for k, v in per_scale.items()},
+            "feed": {
+                "months_probed": feed.probed,
+                "months_found": feed.found,
+                "first_month": list(feed.first_month) if feed.first_month else None,
+                "last_month": list(feed.last_month) if feed.last_month else None,
+                "compressed_bytes": feed.compressed_bytes,
+                "absent_years": list(feed.absent_years),
+            },
+            "projection": projection.as_dict(),
+            "memory": verdict,
+        },
+    )
     return 0

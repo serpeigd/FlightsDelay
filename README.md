@@ -78,6 +78,14 @@ the choice is about memory and operational shape, not speed — see
 [docs/benchmarks.md](docs/benchmarks.md), which also covers partition pruning
 (95.3% of bytes skipped) and clustering (82.1%).
 
+**Then how far away is "ever"?** `flight-delay bench-scale` answers it by asking
+the publisher instead of extending a curve: one HTTP `HEAD` per monthly archive.
+**327 archives exist, 7.70 GB compressed — this project used 9% of them.**
+Calibrated on the 24 months downloaded, the whole feed is roughly **155M rows
+and 3.5 GB of curated Parquet**, and the window-function workload stops fitting
+in this machine's 8.2 GB at around **120M rows**. A cluster becomes the right
+call somewhere before the feed's full history, and for memory rather than speed.
+
 ## Running it
 
 Everything runs inside WSL. Java 17 and Python 3.12 install into `$HOME`, so no
@@ -105,6 +113,13 @@ The two benchmark commands need Java and a Spark session:
 
 ```bash
 flight-delay bench-layout && flight-delay bench-engines
+```
+
+`bench-scale` needs neither, but it does need the network — it issues one HTTP
+`HEAD` per monthly archive to size the feed without downloading it:
+
+```bash
+flight-delay bench-scale
 ```
 
 Then export the deployable bundle and serve it:

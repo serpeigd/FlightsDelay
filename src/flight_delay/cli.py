@@ -20,6 +20,7 @@ The pipeline, in order:
 
     flight-delay bench-layout    partition pruning and clustering (needs Java)
     flight-delay bench-engines   DuckDB against Spark  (needs Java)
+    flight-delay bench-scale     how big the feed really is, and the memory bound
 
 Then serve it:
 
@@ -103,12 +104,13 @@ def _dispatch(command: str, paths: Paths, args: argparse.Namespace) -> int:
         from flight_delay.commands import publish
 
         handlers = {"publish-artifacts": lambda: publish.cmd_publish_artifacts(paths)}
-    elif command in {"bench-layout", "bench-engines"}:
+    elif command in {"bench-layout", "bench-engines", "bench-scale"}:
         from flight_delay.commands import benchmarking
 
         handlers = {
             "bench-layout": lambda: benchmarking.cmd_bench_layout(paths),
             "bench-engines": lambda: benchmarking.cmd_bench_engines(paths),
+            "bench-scale": lambda: benchmarking.cmd_scale(paths),
         }
 
     if command not in handlers:
@@ -129,6 +131,7 @@ COMMANDS: tuple[tuple[str, str], ...] = (
     ("publish-artifacts", "copy the dashboard's inputs into artifacts/ for deployment"),
     ("bench-layout", "partition pruning and clustering (needs Java)"),
     ("bench-engines", "DuckDB against Spark on identical SQL (needs Java)"),
+    ("bench-scale", "size the whole published feed and find the memory bound"),
 )
 
 

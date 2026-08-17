@@ -1,6 +1,6 @@
 # Conclusions
 
-Five questions, asked in order. Two answers came back negative, one came back
+Six questions, asked in order. Two answers came back negative, one came back
 mixed, and the most useful one was never about accuracy.
 
 | # | Question | Answer | Evidence | Command |
@@ -10,6 +10,7 @@ mixed, and the most useful one was never about accuracy.
 | 3 | Do the probabilities mean what they say? | Yes where the flights are; overconfident at the top | Isotonic recalibration tried on two holdouts, **both worse** | `calibrate` |
 | 4 | How bad will tomorrow be at an airport? | Answerable one day out, not one week out | MASE **0.798** national / **0.724** per airport at h=1; **0.987** at h=7 | `forecast` |
 | 5 | Does 13.9M rows need a cluster? | No. One laptop beat the cluster at every size tested | DuckDB faster in **10/10** measurements; the ratio narrows to 2.5x and stops | `bench-engines` |
+| 6 | Would it *ever*? | Yes — near the feed's full history, and for memory, not speed | The published feed is **7.70 GB over 327 archives ≈ 155M rows**; this machine runs out around **120M** | `bench-scale` |
 
 ## What is fair to claim
 
@@ -28,8 +29,9 @@ mixed, and the most useful one was never about accuracy.
 
 - **No weather.** The single largest driver of delay is absent. Everything here
   is the floor that calendar features and history alone reach.
-- **US domestic, 2023-24 only.** Two years of a feed that starts in 1987, cut to
-  what one laptop with 7.6 GB of RAM could hold comfortably.
+- **US domestic, 2023-24 only — 9% of the published feed.** Measured, not
+  guessed: 327 monthly archives exist and total 7.70 GB compressed; this project
+  took 694 MB of them.
 - **Historic files, not a live feed.** No streaming ingestion, no drift
   monitoring, no retraining schedule. Designed for, not built.
 - **Not deployed to users.** A demo and a FastAPI endpoint, not a service with
