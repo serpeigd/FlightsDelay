@@ -14,7 +14,7 @@ mixed, and the most useful one was never about accuracy.
 
 ## What is fair to claim
 
-- A **two-hours-ahead** delay model that is **1.67x better than guessing**, on a
+- A **two-hours-ahead** delay model that is **1.65x better than guessing**, on a
   year it never saw during training.
 - Probabilities that can be **shown to a passenger**: checked against outcomes
   bin by bin, not merely scored.
