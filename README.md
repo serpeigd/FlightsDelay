@@ -50,8 +50,8 @@ expectation and came from reading output, not from a test passing. A few:
   for 14.7% of PR-AUC; the painstakingly built inbound-aircraft features manage
   3.5%. Four of seventeen features measure exactly zero.
 - **Textbook calibration made the model worse, twice.** Isotonic regression
-  degraded Brier and tripled the worst calibration gap. Gradient boosting
-  optimises a proper scoring rule, so it was already calibrated.
+  degraded Brier and more than doubled the worst calibration gap. Gradient
+  boosting optimises a proper scoring rule, so it was already calibrated.
 - **Seconds lie.** A scan took 2.10 s before `OPTIMIZE` and 0.48 s after, reading
   *exactly the same bytes*. That is the page cache, not the layout. Every
   performance claim here is measured in files and bytes read.
