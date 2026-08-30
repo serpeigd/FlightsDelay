@@ -50,8 +50,8 @@ expectation and came from reading output, not from a test passing. A few:
   for 14.7% of PR-AUC; the painstakingly built inbound-aircraft features manage
   3.5%. Four of seventeen features measure exactly zero.
 - **Textbook calibration made the model worse, twice.** Isotonic regression
-  degraded Brier and tripled the worst calibration gap. Gradient boosting
-  optimises a proper scoring rule, so it was already calibrated.
+  degraded Brier and more than doubled the worst calibration gap. Gradient
+  boosting optimises a proper scoring rule, so it was already calibrated.
 - **Seconds lie.** A scan took 2.10 s before `OPTIMIZE` and 0.48 s after, reading
   *exactly the same bytes*. That is the page cache, not the layout. Every
   performance claim here is measured in files and bytes read.
@@ -173,8 +173,8 @@ Two design choices worth naming:
 
 **The threshold is a request parameter, not a constant.** It depends on what a
 missed delay costs against a false alarm, which is a business input this project
-cannot measure. At the conventional 0.5 the service warns 0.9% of passengers and
-catches 2.4% of delays — close to switching itself off.
+cannot measure. At the conventional 0.5 the service warns 2.3% of passengers and
+catches 5.5% of delays — close to switching itself off.
 
 **Only the pre-departure model is served.** Scenario B scores far better and
 answers a question nobody needs answered at request time.
