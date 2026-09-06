@@ -177,16 +177,16 @@ optimum is reported across a range.
 
 | Threshold | Alerts | Alert rate | Precision | Recall |
 |---|---|---|---|---|
-| 0.10 | 5,792,577 | 83.2% | 0.233 | 0.932 |
-| 0.15 | 3,997,878 | 57.4% | 0.272 | 0.751 |
-| 0.20 | 2,560,090 | 36.8% | 0.313 | 0.552 |
-| 0.25 | 1,534,422 | 22.0% | 0.355 | 0.376 |
-| 0.30 | 506,865 | 7.3% | 0.435 | 0.152 |
-| 0.40 | 105,862 | 1.5% | 0.515 | 0.038 |
-| 0.70 | 16,802 | 0.2% | 0.639 | 0.007 |
+| 0.10 | 5,656,860 | 81.2% | 0.236 | 0.920 |
+| 0.15 | 4,084,820 | 58.7% | 0.270 | 0.761 |
+| 0.20 | 2,795,393 | 40.1% | 0.305 | 0.589 |
+| 0.25 | 1,850,714 | 26.6% | 0.340 | 0.434 |
+| 0.30 | 1,193,903 | 17.1% | 0.374 | 0.308 |
+| 0.40 | 462,935 | 6.7% | 0.442 | 0.141 |
+| 0.70 | 7,571 | 0.1% | 0.760 | 0.004 |
 
-**0.5 is not a threshold, it is a default.** At 0.5 the model warns 0.9% of
-passengers and catches 2.4% of delays. With a 20.8% positive rate a calibrated
+**0.5 is not a threshold, it is a default.** At 0.5 the model warns 2.3% of
+passengers and catches 5.5% of delays. With a 20.8% positive rate a calibrated
 model rarely exceeds 0.5 at all, so the conventional cut-off is close to
 switching the system off.
 
@@ -195,14 +195,14 @@ alarm:
 
 | Missed delay costs | Threshold | Alert rate | Precision | Recall |
 |---|---|---|---|---|
-| 1x | 0.55 | 0.9% | 0.541 | 0.023 |
-| 2x | 0.30 | 7.3% | 0.435 | 0.152 |
-| 3x | 0.25 | 22.0% | 0.355 | 0.376 |
-| 5x | 0.15 | 57.4% | 0.272 | 0.751 |
-| 10x | 0.10 | 83.2% | 0.233 | 0.932 |
+| 1x | 0.60 | 0.6% | 0.576 | 0.016 |
+| 2x | 0.35 | 10.8% | 0.408 | 0.212 |
+| 3x | 0.25 | 26.6% | 0.340 | 0.434 |
+| 5x | 0.15 | 58.6% | 0.270 | 0.761 |
+| 10x | 0.10 | 81.2% | 0.236 | 0.920 |
 
 **The answer moves enormously with an assumption nobody has measured.** Between
-a 2x and a 5x cost ratio the alert rate goes from 7% of passengers to 57%.
+a 2x and a 5x cost ratio the alert rate goes from 11% of passengers to 59%.
 Presenting a single "optimal threshold" without that ratio on the table would
 be presenting an arbitrary choice as a result. This is the number to ask a
 product owner for, and the honest deliverable is the curve, not a point on it.

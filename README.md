@@ -173,8 +173,8 @@ Two design choices worth naming:
 
 **The threshold is a request parameter, not a constant.** It depends on what a
 missed delay costs against a false alarm, which is a business input this project
-cannot measure. At the conventional 0.5 the service warns 0.9% of passengers and
-catches 2.4% of delays — close to switching itself off.
+cannot measure. At the conventional 0.5 the service warns 2.3% of passengers and
+catches 5.5% of delays — close to switching itself off.
 
 **Only the pre-departure model is served.** Scenario B scores far better and
 answers a question nobody needs answered at request time.
