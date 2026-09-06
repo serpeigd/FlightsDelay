@@ -121,6 +121,23 @@ far came from reading output: the single unlabelled flight with no arrival
 record, the one-scan-per-column performance bug, and a Delta session that
 looked healthy while the extension was unset.
 
+## Scheduled documentation-sync runs (added 2026-09-06, explicit decision in chat)
+
+Standing authorization to merge doc-only PRs from the recurring cross-repo
+documentation-sync task yourself, by default and without waiting for
+approval — matches the policy now in place across the owner's other repos.
+Merge automatically unless the change genuinely needs manual review (it
+touches product code, encodes an ambiguous decision with more than one
+reasonable reading, or CI fails / the PR isn't cleanly mergeable). This
+repo's CI (`ci.yml`) doesn't run on doc-only changes, so there's no check to
+wait on — the bar is that the diff is exclusively documentation, verified
+against the actual code. That scheduled run lands on a fresh randomly-named
+branch every time, so an unmerged PR from a previous run isn't reused
+automatically — before opening a new one, check for an existing open PR
+titled starting "docs: sync", fold in whatever is still valid (re-verify it
+against the code first), merge the more complete one, and close the other
+with a comment linking to it.
+
 ## Never publish
 
 `CONTEXTO.md` and `AA_Dossier*` (both `.md` and `.pdf`) are personal working
