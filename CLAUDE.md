@@ -54,6 +54,8 @@ flight-delay train       # both scenarios against their baselines
 flight-delay analyse     # permutation importance, threshold choice
 flight-delay calibrate   # two calibration holdouts (both made it worse)
 flight-delay forecast    # daily delay rate, rolling-origin backtest
+flight-delay export-model      # deployable bundle, registered in MLflow
+flight-delay publish-artifacts # copy the dashboard's inputs into artifacts/
 flight-delay bench-layout    # partition pruning, clustering  (needs Java)
 flight-delay bench-engines   # DuckDB vs Spark               (needs Java)
 flight-delay bench-scale     # HEADs every monthly archive; sizes the whole feed
